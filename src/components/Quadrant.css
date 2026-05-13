@@ -1,0 +1,103 @@
+.quadrant {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1rem;
+  min-height: 260px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.quadrant-header {
+  margin-bottom: 0.75rem;
+}
+
+.quadrant-header h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.2rem;
+}
+
+.quadrant-header p {
+  font-size: 0.78rem;
+  margin: 0;
+  opacity: 0.75;
+}
+
+/* Quadrant color themes */
+.q1 {
+  background: #fee2e2;
+  border-left: 4px solid #ef4444;
+}
+
+.q1 .quadrant-header h2 { color: #b91c1c; }
+
+.q2 {
+  background: #d1fae5;
+  border-left: 4px solid #10b981;
+}
+
+.q2 .quadrant-header h2 { color: #065f46; }
+
+.q3 {
+  background: #fef3c7;
+  border-left: 4px solid #f59e0b;
+}
+
+.q3 .quadrant-header h2 { color: #92400e; }
+
+.q4 {
+  background: #ede9fe;
+  border-left: 4px solid #8b5cf6;
+}
+
+.q4 .quadrant-header h2 { color: #4c1d95; }
+
+/* Task list */
+.task-list {
+  flex: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  max-height: 280px;
+}
+
+/* Add task form */
+.add-task-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.add-task-form input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: rgba(255, 255, 255, 0.7);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.add-task-form input:focus {
+  border-color: rgba(0, 0, 0, 0.4);
+  background: #fff;
+}
+
+.add-task-form button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.add-task-form button:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
