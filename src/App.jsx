@@ -68,7 +68,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Eisenhower Matrix</h1>
-        <p>Organise tasks by urgency and importance to maximise productivity</p>
+        <p>Organize tasks by urgency and importance to maximize productivity</p>
       </header>
 
       <div className="matrix-labels">
