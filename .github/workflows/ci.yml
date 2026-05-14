@@ -6,11 +6,12 @@ on:
     branches:
       - main
       - master
-      - 'copilot/**'
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout

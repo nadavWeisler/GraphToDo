@@ -70,7 +70,7 @@ function Quadrant({
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Add a task…"
-          aria-describedby={errorMessage ? `error-${id}` : undefined}
+          {...(errorMessage ? { 'aria-describedby': `error-${id}` } : {})}
           maxLength={120}
         />
         <button type="submit" aria-label={`Add task to ${title}`}>+</button>

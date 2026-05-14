@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
-function getQuadrant(label) {
+function getQuadrantByLabel(label) {
   return screen.getByRole('region', { name: `${label} quadrant` })
 }
 
@@ -10,8 +10,8 @@ test('adds, toggles, and deletes a task', async () => {
   const user = userEvent.setup()
   render(<App />)
 
-  const q1 = getQuadrant('Do First')
-  const addInput = within(q1).getByLabelText('Add task to Do First')
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
   await user.type(addInput, 'Pay rent{enter}')
 
   expect(within(q1).getByText('Pay rent')).toBeTruthy()
@@ -28,14 +28,14 @@ test('moves a task between quadrants', async () => {
   const user = userEvent.setup()
   render(<App />)
 
-  const q1 = getQuadrant('Do First')
-  await user.type(within(q1).getByLabelText('Add task to Do First'), 'Send update{enter}')
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Send update{enter}')
 
   const moveSelect = within(q1).getByRole('combobox', { name: 'Move task' })
   await user.selectOptions(moveSelect, 'q2')
 
   expect(within(q1).queryByText('Send update')).toBeNull()
-  const q2 = getQuadrant('Schedule')
+  const q2 = getQuadrantByLabel('Schedule')
   expect(within(q2).getByText('Send update')).toBeTruthy()
 })
 
@@ -54,11 +54,11 @@ test('loads tasks from storage and persists updates', async () => {
   )
 
   render(<App />)
-  const q2 = getQuadrant('Schedule')
+  const q2 = getQuadrantByLabel('Schedule')
   expect(within(q2).getByText('Review roadmap')).toBeTruthy()
 
-  const q1 = getQuadrant('Do First')
-  await user.type(within(q1).getByLabelText('Add task to Do First'), 'Write tests{enter}')
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Write tests{enter}')
 
   const saved = JSON.parse(localStorage.getItem('graphtodo.tasks.v1'))
   expect(saved.tasks.q1.some((task) => task.text === 'Write tests')).toBe(true)
@@ -68,8 +68,8 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
   const user = userEvent.setup()
   render(<App />)
 
-  const q1 = getQuadrant('Do First')
-  const addInput = within(q1).getByLabelText('Add task to Do First')
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
 
   await user.type(addInput, 'Prepare slides{enter}')
   await user.type(addInput, ' prepare   slides {enter}')

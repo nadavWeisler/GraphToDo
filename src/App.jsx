@@ -31,6 +31,7 @@ const QUADRANTS = [
 
 const STORAGE_KEY = 'graphtodo.tasks.v1'
 const MAX_TASK_LENGTH = 120
+const EXPORT_SCHEMA_VERSION = 1
 
 function emptyTasks() {
   return {
@@ -212,16 +213,11 @@ function App() {
       return { ok: false, error: 'A similar task already exists in the target quadrant.' }
     }
 
-    setTasks((prev) => {
-      const movingTask = prev[sourceQuadrantId].find((task) => task.id === taskId)
-      if (!movingTask) return prev
-
-      return {
-        ...prev,
-        [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
-        [targetQuadrantId]: [...prev[targetQuadrantId], movingTask],
-      }
-    })
+    setTasks((prev) => ({
+      ...prev,
+      [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
+      [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
+    }))
 
     return { ok: true }
   }
@@ -238,6 +234,7 @@ function App() {
 
   function handleExport() {
     const payload = {
+      version: EXPORT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       tasks,
     }
