@@ -26,6 +26,67 @@
   margin: 0;
 }
 
+.toolbar {
+  max-width: 900px;
+  margin: 0 auto 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar-field {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 220px;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.toolbar-field input {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  background: #fff;
+}
+
+.toolbar-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.toolbar-actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions button {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.toolbar-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-message {
+  max-width: 900px;
+  margin: 0 auto 0.5rem;
+  min-height: 1.1rem;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
 /* Axis labels row */
 .matrix-labels {
   display: flex;
@@ -90,5 +151,12 @@
   .importance-label-right {
     display: none;
   }
-}
 
+  .toolbar {
+    justify-content: flex-start;
+  }
+
+  .toolbar-field {
+    width: 100%;
+  }
+}

@@ -23,6 +23,11 @@
   opacity: 0.75;
 }
 
+.count-text {
+  margin-top: 0.3rem;
+  font-weight: 600;
+}
+
 /* Quadrant color themes */
 .q1 {
   background: #fee2e2;
@@ -60,6 +65,12 @@
   padding: 0;
   overflow-y: auto;
   max-height: 280px;
+}
+
+.empty-message {
+  margin: 0.6rem 0;
+  font-size: 0.78rem;
+  opacity: 0.8;
 }
 
 /* Add task form */
@@ -100,4 +111,11 @@
 
 .add-task-form button:hover {
   background: rgba(0, 0, 0, 0.25);
+}
+
+.input-error {
+  min-height: 1rem;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: #991b1b;
 }
