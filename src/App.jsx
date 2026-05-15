@@ -29,7 +29,8 @@ const QUADRANTS = [
   },
 ]
 
-const STORAGE_KEY = 'graphtodo.tasks.v1'
+const STORAGE_KEY = 'graphtodo.state.v2'
+const LEGACY_STORAGE_KEY = 'graphtodo.tasks.v1'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
@@ -103,27 +104,49 @@ function validateTasksShape(data) {
   return next
 }
 
-function loadTasks() {
+function defaultConfig() {
+  return { hideCompleted: false }
+}
+
+function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return emptyTasks()
-    const parsed = JSON.parse(raw)
-    return validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const tasks = validateTasksShape(parsed.tasks) ?? emptyTasks()
+      const config = {
+        ...defaultConfig(),
+        ...(parsed.config && typeof parsed.config === 'object' ? parsed.config : {}),
+      }
+      return { tasks, config }
+    }
+
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const parsed = JSON.parse(legacy)
+      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+      return { tasks, config: defaultConfig() }
+    }
   } catch {
-    return emptyTasks()
+    // fall through to defaults
   }
+  return { tasks: emptyTasks(), config: defaultConfig() }
 }
 
 function App() {
-  const [tasks, setTasks] = useState(loadTasks)
+  const [initialState] = useState(loadState)
+  const [tasks, setTasks] = useState(initialState.tasks)
   const [searchQuery, setSearchQuery] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks }))
-  }, [tasks])
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ tasks, config: { hideCompleted } })
+    )
+  }, [tasks, hideCompleted])
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 

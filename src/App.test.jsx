@@ -60,8 +60,45 @@ test('loads tasks from storage and persists updates', async () => {
   const q1 = getQuadrantByLabel('Do First')
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Write tests{enter}')
 
-  const saved = JSON.parse(localStorage.getItem('graphtodo.tasks.v1'))
+  const saved = JSON.parse(localStorage.getItem('graphtodo.state.v2'))
   expect(saved.tasks.q1.some((task) => task.text === 'Write tests')).toBe(true)
+})
+
+test('persists config flags alongside tasks in state.v2 format', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Config test{enter}')
+
+  const saved = JSON.parse(localStorage.getItem('graphtodo.state.v2'))
+  expect(saved).toHaveProperty('tasks')
+  expect(saved).toHaveProperty('config')
+  expect(typeof saved.config).toBe('object')
+})
+
+test('loads hideCompleted config from storage', async () => {
+  localStorage.setItem(
+    'graphtodo.state.v2',
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Active task', done: false },
+          { id: 't3', text: 'Done in q1', done: true },
+        ],
+        q2: [{ id: 't2', text: 'Done task', done: true }],
+        q3: [],
+        q4: [],
+      },
+      config: { hideCompleted: true },
+    })
+  )
+
+  render(<App />)
+
+  expect(within(getQuadrantByLabel('Do First')).getByText('Active task')).toBeTruthy()
+  expect(within(getQuadrantByLabel('Do First')).queryByText('Done in q1')).toBeNull()
+  expect(within(getQuadrantByLabel('Schedule')).queryByText('Done task')).toBeNull()
 })
 
 test('shows validation error for duplicate tasks in same quadrant', async () => {
