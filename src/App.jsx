@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
 
@@ -103,27 +103,62 @@ function validateTasksShape(data) {
   return next
 }
 
+function canUseLocalStorage() {
+  try {
+    const probeKey = `${STORAGE_KEY}.probe`
+    localStorage.setItem(probeKey, '1')
+    localStorage.removeItem(probeKey)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function loadTasks() {
+  if (!canUseLocalStorage()) {
+    return { tasks: emptyTasks(), storageAvailable: false }
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return emptyTasks()
+    if (!raw) return { tasks: emptyTasks(), storageAvailable: true }
     const parsed = JSON.parse(raw)
-    return validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+    return {
+      tasks: validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks(),
+      storageAvailable: true,
+    }
   } catch {
-    return emptyTasks()
+    return { tasks: emptyTasks(), storageAvailable: true }
   }
 }
 
 function App() {
-  const [tasks, setTasks] = useState(loadTasks)
+  const [initialStorageState] = useState(loadTasks)
+  const [tasks, setTasks] = useState(initialStorageState.tasks)
+  const [storageAvailable, setStorageAvailable] = useState(
+    initialStorageState.storageAvailable
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [hideCompleted, setHideCompleted] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks }))
-  }, [tasks])
+  function persistTasks(nextTasks) {
+    if (!storageAvailable) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: nextTasks }))
+    } catch {
+      setStorageAvailable(false)
+    }
+  }
+
+  function updateTasks(nextOrUpdater) {
+    setTasks((prev) => {
+      const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(prev) : nextOrUpdater
+      persistTasks(next)
+      return next
+    })
+  }
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
@@ -154,7 +189,7 @@ function App() {
       return { ok: false, error: 'A similar task already exists in this quadrant.' }
     }
 
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       ...prev,
       [quadrantId]: [...prev[quadrantId], createTask(cleanText)],
     }))
@@ -163,7 +198,7 @@ function App() {
   }
 
   function handleToggleTask(quadrantId, taskId) {
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((t) =>
         t.id === taskId ? { ...t, done: !t.done } : t
@@ -172,7 +207,7 @@ function App() {
   }
 
   function handleDeleteTask(quadrantId, taskId) {
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].filter((t) => t.id !== taskId),
     }))
@@ -193,7 +228,7 @@ function App() {
       return { ok: false, error: 'A similar task already exists in this quadrant.' }
     }
 
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
         task.id === taskId ? { ...task, text: cleanText } : task
@@ -213,7 +248,7 @@ function App() {
       return { ok: false, error: 'A similar task already exists in the target quadrant.' }
     }
 
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       ...prev,
       [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
       [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
@@ -223,7 +258,7 @@ function App() {
   }
 
   function handleClearCompleted() {
-    setTasks((prev) => ({
+    updateTasks((prev) => ({
       q1: prev.q1.filter((task) => !task.done),
       q2: prev.q2.filter((task) => !task.done),
       q3: prev.q3.filter((task) => !task.done),
@@ -265,7 +300,7 @@ function App() {
         return
       }
 
-      setTasks(imported)
+      updateTasks(imported)
       setStatusMessage('Tasks imported successfully.')
     } catch {
       setStatusMessage('Import failed: unable to parse JSON.')
@@ -334,6 +369,12 @@ function App() {
           </button>
         </div>
       </section>
+
+      {!storageAvailable && (
+        <p className="storage-warning" role="alert">
+          Local storage is unavailable. Tasks are only kept in memory and may be lost on refresh.
+        </p>
+      )}
 
       <p className="status-message" role="status" aria-live="polite">
         {statusMessage}

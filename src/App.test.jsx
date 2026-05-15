@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { vi } from 'vitest'
 import App from './App'
 
 function getQuadrantByLabel(label) {
@@ -75,4 +76,37 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
   await user.type(addInput, ' prepare   slides {enter}')
 
   expect(within(q1).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
+})
+
+test('falls back to in-memory tasks when localStorage is unavailable', async () => {
+  const user = userEvent.setup()
+  const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+  const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+  const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+
+  try {
+    render(<App />)
+
+    expect(
+      screen.getByText(
+        'Local storage is unavailable. Tasks are only kept in memory and may be lost on refresh.'
+      )
+    ).toBeTruthy()
+
+    const q1 = getQuadrantByLabel('Do First')
+    const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+    await user.type(addInput, 'Stay focused{enter}')
+
+    expect(within(q1).getByText('Stay focused')).toBeTruthy()
+  } finally {
+    getItemSpy.mockRestore()
+    setItemSpy.mockRestore()
+    removeItemSpy.mockRestore()
+  }
 })
