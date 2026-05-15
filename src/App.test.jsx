@@ -139,7 +139,6 @@ test('keeps focus on the add input after creating a task', async () => {
 
   addInput.focus()
   await user.type(addInput, 'Plan sprint{enter}')
-
   expect(document.activeElement).toBe(addInput)
 })
 
