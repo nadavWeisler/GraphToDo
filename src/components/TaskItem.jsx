@@ -9,6 +9,8 @@ function TaskItem({
   onDelete,
   onSave,
   onMove,
+  onDragStart,
+  onDragEnd,
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
@@ -61,7 +63,12 @@ function TaskItem({
   }
 
   return (
-    <li className={`task-item${task.done ? ' done' : ''}`}>
+    <li
+      className={`task-item${task.done ? ' done' : ''}`}
+      draggable={!isEditing}
+      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
+      onDragEnd={onDragEnd}
+    >
       <button
         className="toggle-btn"
         onClick={onToggle}
