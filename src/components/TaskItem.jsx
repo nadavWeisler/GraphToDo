@@ -3,9 +3,12 @@ import './TaskItem.css'
 
 function formatDueDate(dateString) {
   if (!dateString) return null
+  // Only accept YYYY-MM-DD format (as produced by <input type="date">)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateString + 'T00:00:00')
+  if (isNaN(due.getTime())) return null
   const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
 
   if (diffDays < 0) return { label: 'Overdue', urgency: 'overdue' }
@@ -98,7 +101,6 @@ function TaskItem({
             type="date"
             value={draftDueDate}
             onChange={(event) => setDraftDueDate(event.target.value)}
-            aria-label="Due date"
           />
           <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
           <button type="button" className="task-action-btn" onClick={handleCancel}>
