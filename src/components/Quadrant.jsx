@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import TaskItem from './TaskItem'
 import './Quadrant.css'
 
@@ -19,6 +19,7 @@ function Quadrant({
 }) {
   const [input, setInput] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const addInputRef = useRef(null)
 
   function handleAdd(event) {
     event.preventDefault()
@@ -31,6 +32,7 @@ function Quadrant({
 
     setInput('')
     setErrorMessage('')
+    addInputRef.current?.focus()
   }
 
   return (
@@ -65,6 +67,7 @@ function Quadrant({
           Add task to {title}
         </label>
         <input
+          ref={addInputRef}
           id={`add-${id}`}
           type="text"
           value={input}

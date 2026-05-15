@@ -76,3 +76,50 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
 
   expect(within(q1).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
 })
+
+test('keeps focus on the add input after creating a task', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+
+  addInput.focus()
+  await user.type(addInput, 'Plan sprint{enter}')
+
+  expect(document.activeElement).toBe(addInput)
+})
+
+test('moves focus into and out of the edit form logically', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Draft summary{enter}')
+
+  const editButton = within(q1).getByRole('button', { name: 'Edit task' })
+  await user.click(editButton)
+
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  expect(document.activeElement).toBe(editInput)
+
+  await user.clear(editInput)
+  await user.type(editInput, 'Draft summary updated{enter}')
+
+  expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+})
+
+test('returns focus to the edit button when editing is cancelled', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Review notes{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+
+  await user.type(editInput, '{Escape}')
+
+  expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+})
