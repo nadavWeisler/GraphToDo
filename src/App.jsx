@@ -48,11 +48,13 @@ function validateTasksShape(data) {
   const next = emptyTasks()
 
   for (const { id, legacyId } of QUADRANTS) {
-    const quadrantTasks = Array.isArray(data[id])
-      ? data[id]
-      : Array.isArray(data[legacyId])
-        ? data[legacyId]
-        : null
+    let quadrantTasks = null
+
+    if (Array.isArray(data[id])) {
+      quadrantTasks = data[id]
+    } else if (Array.isArray(data[legacyId])) {
+      quadrantTasks = data[legacyId]
+    }
 
     if (!Array.isArray(quadrantTasks)) return null
 
