@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { QUADRANTS, STORAGE_KEY } from './quadrants'
@@ -45,6 +45,41 @@ test('moves a task between quadrants', async () => {
   expect(within(firstRegion).queryByText('Send update')).toBeNull()
   const secondRegion = getQuadrantByLabel(secondQuadrant.title)
   expect(within(secondRegion).getByText('Send update')).toBeTruthy()
+})
+
+test('moves a task between quadrants with drag and drop', async () => {
+  const [firstQuadrant, , thirdQuadrant] = QUADRANTS
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  await user.type(
+    within(firstRegion).getByRole('textbox', { name: `Add task to ${firstQuadrant.title}` }),
+    'Plan sprint{enter}'
+  )
+
+  const task = within(firstRegion).getByText('Plan sprint').closest('li')
+  const thirdRegion = getQuadrantByLabel(thirdQuadrant.title)
+  const dragData = new Map()
+  const dataTransfer = {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    types: [],
+    setData(type, value) {
+      dragData.set(type, value)
+      this.types = [...dragData.keys()]
+    },
+    getData(type) {
+      return dragData.get(type) ?? ''
+    },
+  }
+
+  fireEvent.dragStart(task, { dataTransfer })
+  fireEvent.dragOver(thirdRegion, { dataTransfer })
+  fireEvent.drop(thirdRegion, { dataTransfer })
+
+  expect(within(firstRegion).queryByText('Plan sprint')).toBeNull()
+  expect(within(thirdRegion).getByText('Plan sprint')).toBeTruthy()
 })
 
 test('loads tasks from legacy storage keys and persists current quadrant ids', async () => {
