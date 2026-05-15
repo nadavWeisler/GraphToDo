@@ -133,15 +133,20 @@ function validateImportedTasksShape(data) {
         throw new Error(`Task ${index + 1} in "${id}" is missing a valid "text" string.`)
       }
 
+      if (!normalizeText(task.text)) {
+        throw new Error(`Task ${index + 1} in "${id}" must have non-empty "text".`)
+      }
+
       if (typeof task.done !== 'boolean') {
         throw new Error(`Task ${index + 1} in "${id}" is missing a valid "done" boolean.`)
       }
 
-      const normalized = sanitizeTask(task)
-      if (!normalized) {
-        throw new Error(`Task ${index + 1} in "${id}" has empty text after trimming.`)
-      }
-      sanitized.push(normalized)
+      const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
+      sanitized.push({
+        text,
+        done: task.done,
+        id: task.id.trim(),
+      })
     }
 
     const deduped = []
