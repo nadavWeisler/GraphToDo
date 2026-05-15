@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import TaskItem from './TaskItem'
 import './Quadrant.css'
 
@@ -19,6 +19,8 @@ function Quadrant({
 }) {
   const [input, setInput] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
+  const dragCounterRef = useRef(0)
 
   function handleAdd(event) {
     event.preventDefault()
@@ -33,8 +35,51 @@ function Quadrant({
     setErrorMessage('')
   }
 
+  function handleDragOver(event) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleDragEnter(event) {
+    event.preventDefault()
+    dragCounterRef.current += 1
+    setIsDragOver(true)
+  }
+
+  function handleDragLeave() {
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current === 0) {
+      setIsDragOver(false)
+    }
+  }
+
+  function handleDrop(event) {
+    event.preventDefault()
+    dragCounterRef.current = 0
+    setIsDragOver(false)
+    try {
+      const data = JSON.parse(event.dataTransfer.getData('application/graphtodo-task'))
+      const { taskId, sourceQuadrantId } = data
+      if (sourceQuadrantId !== id) {
+        const result = onMoveTask(sourceQuadrantId, taskId, id)
+        if (!result.ok) {
+          setErrorMessage(result.error)
+        }
+      }
+    } catch {
+      // ignore drops that don't carry valid task data
+    }
+  }
+
   return (
-    <section className={`quadrant ${colorClass}`} aria-label={`${title} quadrant`}>
+    <section
+      className={`quadrant ${colorClass}${isDragOver ? ' drag-over' : ''}`}
+      aria-label={`${title} quadrant`}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="quadrant-header">
         <h2>{title}</h2>
         <p>{subtitle}</p>

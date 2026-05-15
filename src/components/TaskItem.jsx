@@ -43,8 +43,20 @@ function TaskItem({
     setErrorMessage('')
   }
 
+  function handleDragStart(event) {
+    event.dataTransfer.setData(
+      'application/graphtodo-task',
+      JSON.stringify({ taskId: task.id, sourceQuadrantId: currentQuadrantId })
+    )
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
   return (
-    <li className={`task-item${task.done ? ' done' : ''}`}>
+    <li
+      className={`task-item${task.done ? ' done' : ''}`}
+      draggable
+      onDragStart={handleDragStart}
+    >
       <button
         className="toggle-btn"
         onClick={onToggle}

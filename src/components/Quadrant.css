@@ -119,3 +119,10 @@
   font-size: 0.72rem;
   color: #991b1b;
 }
+
+/* Drag-and-drop target highlight */
+.quadrant.drag-over {
+  outline: 2px dashed rgba(0, 0, 0, 0.35);
+  outline-offset: -4px;
+  background-color: rgba(0, 0, 0, 0.04);
+}

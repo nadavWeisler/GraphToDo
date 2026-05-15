@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
@@ -75,4 +75,59 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
   await user.type(addInput, ' prepare   slides {enter}')
 
   expect(within(q1).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
+})
+
+test('drag-and-drop moves a task to another quadrant', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Drag me{enter}')
+
+  expect(within(q1).getByText('Drag me')).toBeTruthy()
+
+  const taskItem = within(q1).getByText('Drag me').closest('li')
+  const q2 = getQuadrantByLabel('Schedule')
+
+  const dataTransfer = {
+    data: {},
+    setData(type, value) { this.data[type] = value },
+    getData(type) { return this.data[type] ?? '' },
+    effectAllowed: 'move',
+    dropEffect: 'move',
+  }
+
+  fireEvent.dragStart(taskItem, { dataTransfer })
+  fireEvent.dragEnter(q2, { dataTransfer })
+  fireEvent.dragOver(q2, { dataTransfer })
+  fireEvent.drop(q2, { dataTransfer })
+
+  expect(within(q1).queryByText('Drag me')).toBeNull()
+  expect(within(q2).getByText('Drag me')).toBeTruthy()
+})
+
+test('drag-over applies visual feedback class on quadrant', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Highlight test{enter}')
+
+  const taskItem = within(q1).getByText('Highlight test').closest('li')
+  const q2 = getQuadrantByLabel('Schedule')
+
+  const dataTransfer = {
+    data: {},
+    setData(type, value) { this.data[type] = value },
+    getData(type) { return this.data[type] ?? '' },
+    effectAllowed: 'move',
+    dropEffect: 'move',
+  }
+
+  fireEvent.dragStart(taskItem, { dataTransfer })
+  fireEvent.dragEnter(q2, { dataTransfer })
+  expect(q2.classList.contains('drag-over')).toBe(true)
+
+  fireEvent.dragLeave(q2, { dataTransfer })
+  expect(q2.classList.contains('drag-over')).toBe(false)
 })

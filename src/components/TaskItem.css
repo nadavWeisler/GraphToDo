@@ -6,6 +6,11 @@
   padding: 0.35rem 0.4rem;
   border-radius: 6px;
   transition: background 0.1s;
+  cursor: grab;
+}
+
+.task-item:active {
+  cursor: grabbing;
 }
 
 .task-item:hover {
