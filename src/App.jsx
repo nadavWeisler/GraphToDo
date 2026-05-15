@@ -45,8 +45,9 @@ function emptyTasks() {
 function compactTasks(tasks) {
   const compacted = {}
   for (const { id } of QUADRANTS) {
-    if (tasks[id].length) {
-      compacted[id] = tasks[id]
+    const quadrantTasks = tasks[id]
+    if (Array.isArray(quadrantTasks) && quadrantTasks.length) {
+      compacted[id] = quadrantTasks
     }
   }
   return compacted
