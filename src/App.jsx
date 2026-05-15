@@ -42,6 +42,16 @@ function emptyTasks() {
   }
 }
 
+function compactTasks(tasks) {
+  const compacted = {}
+  for (const { id } of QUADRANTS) {
+    if (tasks[id].length) {
+      compacted[id] = tasks[id]
+    }
+  }
+  return compacted
+}
+
 function normalizeText(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
@@ -77,10 +87,11 @@ function isDuplicate(tasks, quadrantId, text, excludedTaskId = null) {
 }
 
 function validateTasksShape(data) {
-  if (!data || typeof data !== 'object') return null
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
   const next = emptyTasks()
 
   for (const { id } of QUADRANTS) {
+    if (data[id] === undefined) continue
     if (!Array.isArray(data[id])) return null
 
     const sanitized = data[id]
@@ -122,7 +133,13 @@ function App() {
   const importInputRef = useRef(null)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks }))
+    const compacted = compactTasks(tasks)
+    if (Object.keys(compacted).length === 0) {
+      localStorage.removeItem(STORAGE_KEY)
+      return
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: compacted }))
   }, [tasks])
 
   const normalizedSearch = searchQuery.trim().toLowerCase()

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
@@ -62,6 +62,43 @@ test('loads tasks from storage and persists updates', async () => {
 
   const saved = JSON.parse(localStorage.getItem('graphtodo.tasks.v1'))
   expect(saved.tasks.q1.some((task) => task.text === 'Write tests')).toBe(true)
+})
+
+test('removes emptied quadrants from persisted storage', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    'graphtodo.tasks.v1',
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task-1', text: 'Only item', done: false }],
+        q2: [{ id: 'task-2', text: 'Keep me', done: false }],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  await user.click(within(q1).getByRole('button', { name: 'Delete task' }))
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem('graphtodo.tasks.v1'))
+    expect(saved.tasks.q1).toBeUndefined()
+    expect(saved.tasks.q2).toEqual([{ id: 'task-2', text: 'Keep me', done: false }])
+  })
+})
+
+test('clears storage key when all tasks are removed', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Finish report{enter}')
+  await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
+  await user.click(screen.getByRole('button', { name: 'Clear completed' }))
+
+  await waitFor(() => {
+    expect(localStorage.getItem('graphtodo.tasks.v1')).toBeNull()
+  })
 })
 
 test('shows validation error for duplicate tasks in same quadrant', async () => {
