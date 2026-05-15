@@ -76,3 +76,55 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
 
   expect(within(q1).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
 })
+
+test('can set and display a due date on a task', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Fix bug{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const dueDateInput = within(q1).getByLabelText('Due date')
+  await user.type(dueDateInput, '2099-12-31')
+
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  expect(within(q1).getByLabelText(/Due:/)).toBeTruthy()
+})
+
+test('sort by due date orders tasks within a quadrant', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    'graphtodo.tasks.v1',
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 'a', text: 'Later task', done: false, dueDate: '2099-12-31' },
+          { id: 'b', text: 'Earlier task', done: false, dueDate: '2099-06-01' },
+          { id: 'c', text: 'No date task', done: false, dueDate: null },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const sortCheckbox = screen.getByRole('checkbox', { name: 'Sort by due date' })
+  await user.click(sortCheckbox)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const items = within(q1).getAllByRole('listitem')
+  const texts = items.map((el) => el.textContent)
+
+  const earlierIdx = texts.findIndex((t) => t.includes('Earlier task'))
+  const laterIdx = texts.findIndex((t) => t.includes('Later task'))
+  const noDateIdx = texts.findIndex((t) => t.includes('No date task'))
+
+  expect(earlierIdx).toBeLessThan(laterIdx)
+  expect(laterIdx).toBeLessThan(noDateIdx)
+})

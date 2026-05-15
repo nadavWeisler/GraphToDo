@@ -47,7 +47,7 @@ function normalizeText(value) {
 }
 
 function createTask(text) {
-  return { id: crypto.randomUUID(), text, done: false }
+  return { id: crypto.randomUUID(), text, done: false, dueDate: null }
 }
 
 function isValidTask(task) {
@@ -55,7 +55,8 @@ function isValidTask(task) {
     task &&
     typeof task.id === 'string' &&
     typeof task.text === 'string' &&
-    typeof task.done === 'boolean'
+    typeof task.done === 'boolean' &&
+    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string')
   )
 }
 
@@ -66,7 +67,13 @@ function sanitizeTask(task) {
     id: task.id,
     text,
     done: task.done,
+    dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
   }
+}
+
+function dueDateSortKey(dueDate) {
+  if (!dueDate) return Infinity
+  return new Date(dueDate + 'T00:00:00').getTime()
 }
 
 function isDuplicate(tasks, quadrantId, text, excludedTaskId = null) {
@@ -118,6 +125,7 @@ function App() {
   const [tasks, setTasks] = useState(loadTasks)
   const [searchQuery, setSearchQuery] = useState('')
   const [hideCompleted, setHideCompleted] = useState(false)
+  const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
@@ -130,14 +138,20 @@ function App() {
   const visibleTasks = useMemo(() => {
     const next = emptyTasks()
     for (const { id } of QUADRANTS) {
-      next[id] = tasks[id].filter((task) => {
+      let filtered = tasks[id].filter((task) => {
         if (hideCompleted && task.done) return false
         if (!normalizedSearch) return true
         return task.text.toLowerCase().includes(normalizedSearch)
       })
+      if (sortByDueDate) {
+        filtered = [...filtered].sort(
+          (a, b) => dueDateSortKey(a.dueDate) - dueDateSortKey(b.dueDate)
+        )
+      }
+      next[id] = filtered
     }
     return next
-  }, [hideCompleted, normalizedSearch, tasks])
+  }, [hideCompleted, normalizedSearch, sortByDueDate, tasks])
 
   function handleAddTask(quadrantId, text) {
     const cleanText = normalizeText(text)
@@ -178,7 +192,7 @@ function App() {
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText) {
+  function handleEditTask(quadrantId, taskId, nextText, nextDueDate = null) {
     const cleanText = normalizeText(nextText)
 
     if (!cleanText) {
@@ -196,7 +210,7 @@ function App() {
     setTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
-        task.id === taskId ? { ...task, text: cleanText } : task
+        task.id === taskId ? { ...task, text: cleanText, dueDate: nextDueDate } : task
       ),
     }))
 
@@ -307,6 +321,16 @@ function App() {
             onChange={(event) => setHideCompleted(event.target.checked)}
           />
           <span>Hide completed</span>
+        </label>
+
+        <label className="toolbar-checkbox" htmlFor="sort-due-date">
+          <input
+            id="sort-due-date"
+            type="checkbox"
+            checked={sortByDueDate}
+            onChange={(event) => setSortByDueDate(event.target.checked)}
+          />
+          <span>Sort by due date</span>
         </label>
 
         <div className="toolbar-actions">

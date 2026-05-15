@@ -52,7 +52,7 @@ function Quadrant({
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}
-            onSave={(nextText) => onEditTask(id, task.id, nextText)}
+            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
           />
         ))}

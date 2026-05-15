@@ -1,6 +1,23 @@
 import { useState } from 'react'
 import './TaskItem.css'
 
+function formatDueDate(dateString) {
+  if (!dateString) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dateString + 'T00:00:00')
+  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+
+  if (diffDays < 0) return { label: 'Overdue', urgency: 'overdue' }
+  if (diffDays === 0) return { label: 'Today', urgency: 'today' }
+  if (diffDays === 1) return { label: 'Tomorrow', urgency: 'soon' }
+  if (diffDays <= 3) return { label: `${diffDays} days`, urgency: 'soon' }
+  return {
+    label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    urgency: 'normal',
+  }
+}
+
 function TaskItem({
   task,
   quadrants,
@@ -12,11 +29,12 @@ function TaskItem({
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
+  const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
   const [errorMessage, setErrorMessage] = useState('')
 
   function handleSave(event) {
     event.preventDefault()
-    const result = onSave(draftText)
+    const result = onSave({ text: draftText, dueDate: draftDueDate || null })
     if (!result.ok) {
       setErrorMessage(result.error)
       return
@@ -39,9 +57,12 @@ function TaskItem({
 
   function handleCancel() {
     setDraftText(task.text)
+    setDraftDueDate(task.dueDate ?? '')
     setIsEditing(false)
     setErrorMessage('')
   }
+
+  const dueDateInfo = formatDueDate(task.dueDate)
 
   return (
     <li className={`task-item${task.done ? ' done' : ''}`}>
@@ -70,13 +91,32 @@ function TaskItem({
               }
             }}
           />
+          <label className="sr-only" htmlFor={`due-${task.id}`}>Due date</label>
+          <input
+            id={`due-${task.id}`}
+            className="task-due-input"
+            type="date"
+            value={draftDueDate}
+            onChange={(event) => setDraftDueDate(event.target.value)}
+            aria-label="Due date"
+          />
           <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
           <button type="button" className="task-action-btn" onClick={handleCancel}>
             Cancel
           </button>
         </form>
       ) : (
-        <span className="task-text">{task.text}</span>
+        <div className="task-text-area">
+          <span className="task-text">{task.text}</span>
+          {dueDateInfo && (
+            <span
+              className={`due-date-badge due-date-${dueDateInfo.urgency}`}
+              aria-label={`Due: ${dueDateInfo.label}`}
+            >
+              📅 {dueDateInfo.label}
+            </span>
+          )}
+        </div>
       )}
 
       {!isEditing ? (
