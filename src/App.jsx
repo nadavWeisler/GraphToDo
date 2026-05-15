@@ -1,45 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
-
-const QUADRANTS = [
-  {
-    id: 'q1',
-    colorClass: 'q1',
-    title: 'Do First',
-    subtitle: 'Urgent & Important',
-  },
-  {
-    id: 'q2',
-    colorClass: 'q2',
-    title: 'Schedule',
-    subtitle: 'Not Urgent & Important',
-  },
-  {
-    id: 'q3',
-    colorClass: 'q3',
-    title: 'Delegate',
-    subtitle: 'Urgent & Not Important',
-  },
-  {
-    id: 'q4',
-    colorClass: 'q4',
-    title: 'Eliminate',
-    subtitle: 'Not Urgent & Not Important',
-  },
-]
-
-const STORAGE_KEY = 'graphtodo.tasks.v1'
+import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
 function emptyTasks() {
-  return {
-    q1: [],
-    q2: [],
-    q3: [],
-    q4: [],
-  }
+  return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
 }
 
 function normalizeText(value) {
@@ -80,10 +47,16 @@ function validateTasksShape(data) {
   if (!data || typeof data !== 'object') return null
   const next = emptyTasks()
 
-  for (const { id } of QUADRANTS) {
-    if (!Array.isArray(data[id])) return null
+  for (const { id, legacyId } of QUADRANTS) {
+    const quadrantTasks = Array.isArray(data[id])
+      ? data[id]
+      : Array.isArray(data[legacyId])
+        ? data[legacyId]
+        : null
 
-    const sanitized = data[id]
+    if (!Array.isArray(quadrantTasks)) return null
+
+    const sanitized = quadrantTasks
       .filter(isValidTask)
       .map(sanitizeTask)
       .filter(Boolean)
@@ -223,12 +196,15 @@ function App() {
   }
 
   function handleClearCompleted() {
-    setTasks((prev) => ({
-      q1: prev.q1.filter((task) => !task.done),
-      q2: prev.q2.filter((task) => !task.done),
-      q3: prev.q3.filter((task) => !task.done),
-      q4: prev.q4.filter((task) => !task.done),
-    }))
+    setTasks((prev) => {
+      const next = emptyTasks()
+
+      for (const id of QUADRANT_IDS) {
+        next[id] = prev[id].filter((task) => !task.done)
+      }
+
+      return next
+    })
     setStatusMessage('Completed tasks cleared.')
   }
 
