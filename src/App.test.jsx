@@ -24,6 +24,26 @@ test('adds, toggles, and deletes a task', async () => {
   expect(within(q1).queryByText('Pay rent')).toBeNull()
 })
 
+test('reopens a completed task from the task itself and updates completed controls', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const clearCompletedButton = screen.getByRole('button', { name: 'Clear completed' })
+
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Pay rent{enter}')
+  expect(clearCompletedButton.disabled).toBe(true)
+
+  await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
+  expect(clearCompletedButton.disabled).toBe(false)
+
+  await user.click(within(q1).getByRole('button', { name: 'Reopen task: Pay rent' }))
+
+  expect(within(q1).getByRole('button', { name: 'Mark complete' })).toBeTruthy()
+  expect(within(q1).queryByRole('button', { name: 'Mark incomplete' })).toBeNull()
+  expect(clearCompletedButton.disabled).toBe(true)
+})
+
 test('moves a task between quadrants', async () => {
   const user = userEvent.setup()
   render(<App />)
