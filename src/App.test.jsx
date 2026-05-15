@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
@@ -37,6 +37,37 @@ test('moves a task between quadrants', async () => {
   expect(within(q1).queryByText('Send update')).toBeNull()
   const q2 = getQuadrantByLabel('Schedule')
   expect(within(q2).getByText('Send update')).toBeTruthy()
+})
+
+test('moves a task between quadrants with drag and drop', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Plan sprint{enter}')
+
+  const task = within(q1).getByText('Plan sprint').closest('li')
+  const q3 = getQuadrantByLabel('Delegate')
+  const dragData = new Map()
+  const dataTransfer = {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    types: [],
+    setData(type, value) {
+      dragData.set(type, value)
+      this.types = [...dragData.keys()]
+    },
+    getData(type) {
+      return dragData.get(type) ?? ''
+    },
+  }
+
+  fireEvent.dragStart(task, { dataTransfer })
+  fireEvent.dragOver(q3, { dataTransfer })
+  fireEvent.drop(q3, { dataTransfer })
+
+  expect(within(q1).queryByText('Plan sprint')).toBeNull()
+  expect(within(q3).getByText('Plan sprint')).toBeTruthy()
 })
 
 test('loads tasks from storage and persists updates', async () => {

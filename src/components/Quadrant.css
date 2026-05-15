@@ -5,6 +5,12 @@
   padding: 1.25rem 1.25rem 1rem;
   min-height: 260px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.quadrant.drag-over {
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.18), 0 10px 25px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
 }
 
 .quadrant-header {
