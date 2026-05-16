@@ -155,7 +155,7 @@ test('removes emptied quadrants from persisted storage', async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
-    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false }])
+    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null }])
   })
 })
 
@@ -329,4 +329,93 @@ test('sort by due date orders tasks within a quadrant', async () => {
 
   expect(earlierIdx).toBeLessThan(laterIdx)
   expect(laterIdx).toBeLessThan(noDateIdx)
+})
+
+test('adds a task with a due date and shows it in the task list', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+  const dateInput = within(q1).getByLabelText('New task due date')
+  await user.type(addInput, 'Submit report')
+  await user.type(dateInput, '2030-12-31')
+  await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
+
+  expect(within(q1).getByText('Submit report')).toBeTruthy()
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Submit report' && t.dueDate === '2030-12-31')).toBe(true)
+})
+
+test('shows overdue indicator for tasks with a past due date', async () => {
+  localStorage.setItem(
+    'graphtodo.tasks.v1',
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task1', text: 'Old task', done: false, dueDate: '2000-01-01', dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  const badge = within(q1).getByLabelText(/overdue/i)
+  expect(badge).toBeTruthy()
+})
+
+test('shows due-today indicator for tasks due today', async () => {
+  const today = new Date()
+  const todayStr = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  localStorage.setItem(
+    'graphtodo.tasks.v1',
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task2', text: 'Due today task', done: false, dueDate: todayStr, dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  const badge = within(q1).getByLabelText(/due today/i)
+  expect(badge).toBeTruthy()
+})
+
+test('edit task can set and update due date', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task3', text: 'Fix bug', done: false, dueDate: null, dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const dateInput = within(q1).getByLabelText('Due date')
+  await user.type(dateInput, '2030-06-15')
+
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
 })
