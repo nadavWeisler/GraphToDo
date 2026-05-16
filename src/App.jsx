@@ -78,6 +78,67 @@ function validateTasksShape(data) {
   return next
 }
 
+function validateImportedTasksShape(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Expected an object with q1, q2, q3, and q4 arrays.')
+  }
+
+  const next = emptyTasks()
+
+  for (const { id } of QUADRANTS) {
+    if (!(id in data)) {
+      throw new Error(`Missing required quadrant "${id}".`)
+    }
+
+    if (!Array.isArray(data[id])) {
+      throw new Error(`Quadrant "${id}" must be an array of tasks.`)
+    }
+
+    const sanitized = []
+    for (const [index, task] of data[id].entries()) {
+      if (!task || typeof task !== 'object' || Array.isArray(task)) {
+        throw new Error(`Task ${index + 1} in "${id}" must be an object.`)
+      }
+
+      if (typeof task.id !== 'string' || !task.id.trim()) {
+        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "id" string.`)
+      }
+
+      if (typeof task.text !== 'string') {
+        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "text" string.`)
+      }
+
+      if (!normalizeText(task.text)) {
+        throw new Error(`Task ${index + 1} in "${id}" must have non-empty "text".`)
+      }
+
+      if (typeof task.done !== 'boolean') {
+        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "done" boolean.`)
+      }
+
+      const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
+      sanitized.push({
+        text,
+        done: task.done,
+        id: task.id.trim(),
+      })
+    }
+
+    const deduped = []
+    const seen = new Set()
+    for (const task of sanitized) {
+      const key = normalizeText(task.text).toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      deduped.push(task)
+    }
+
+    next[id] = deduped
+  }
+
+  return next
+}
+
 function loadTasks() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -236,17 +297,22 @@ function App() {
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
-      const imported = validateTasksShape(parsed.tasks ?? parsed)
-
-      if (!imported) {
-        setStatusMessage('Import failed: invalid GraphToDo JSON format.')
-        return
-      }
+      const imported = validateImportedTasksShape(parsed.tasks ?? parsed)
 
       setTasks(imported)
       setStatusMessage('Tasks imported successfully.')
-    } catch {
-      setStatusMessage('Import failed: unable to parse JSON.')
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        setStatusMessage('Import failed: invalid JSON syntax. Please upload a valid .json file.')
+        return
+      }
+
+      if (error instanceof Error) {
+        setStatusMessage(`Import failed: ${error.message}`)
+        return
+      }
+
+      setStatusMessage('Import failed: unable to process this file.')
     } finally {
       if (importInputRef.current) {
         importInputRef.current.value = ''

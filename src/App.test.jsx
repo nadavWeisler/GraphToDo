@@ -175,3 +175,39 @@ test('returns focus to the edit button when editing is cancelled', async () => {
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
 })
+
+test('imports valid JSON tasks and shows success message', async () => {
+  const user = userEvent.setup()
+  const { container } = render(<App />)
+
+  const fileInput = container.querySelector('input[type="file"]')
+  const file = new File(
+    [JSON.stringify({ tasks: { q1: [{ id: 'a', text: 'Plan sprint', done: false }], q2: [], q3: [], q4: [] } })],
+    'tasks.json',
+    { type: 'application/json' }
+  )
+
+  await user.upload(fileInput, file)
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Plan sprint')).toBeTruthy()
+  expect(screen.getByText('Tasks imported successfully.')).toBeTruthy()
+})
+
+test('shows actionable error when imported JSON schema is invalid', async () => {
+  const user = userEvent.setup()
+  const { container } = render(<App />)
+
+  const fileInput = container.querySelector('input[type="file"]')
+  const file = new File(
+    [JSON.stringify({ tasks: { q1: [{ id: 'a', done: false }], q2: [], q3: [], q4: [] } })],
+    'invalid-tasks.json',
+    { type: 'application/json' }
+  )
+
+  await user.upload(fileInput, file)
+
+  expect(
+    screen.getByText('Import failed: Task 1 in "q1" is missing a valid "text" string.')
+  ).toBeTruthy()
+})
