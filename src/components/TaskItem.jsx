@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
 
 function TaskItem({
@@ -15,6 +15,21 @@ function TaskItem({
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
   const [errorMessage, setErrorMessage] = useState('')
+  const editInputRef = useRef(null)
+  const editButtonRef = useRef(null)
+  const shouldRestoreFocusRef = useRef(false)
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus()
+      return
+    }
+
+    if (shouldRestoreFocusRef.current) {
+      editButtonRef.current?.focus()
+      shouldRestoreFocusRef.current = false
+    }
+  }, [isEditing])
 
   function handleSave(event) {
     event.preventDefault()
@@ -24,6 +39,7 @@ function TaskItem({
       return
     }
 
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -41,6 +57,7 @@ function TaskItem({
 
   function handleCancel() {
     setDraftText(task.text)
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -64,13 +81,13 @@ function TaskItem({
         <form className="edit-task-form" onSubmit={handleSave}>
           <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
           <input
+            ref={editInputRef}
             id={`edit-${task.id}`}
             className="task-edit-input"
             type="text"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
             maxLength={120}
-            autoFocus
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 handleCancel()
@@ -104,6 +121,7 @@ function TaskItem({
           </select>
 
           <button
+            ref={editButtonRef}
             className="task-action-btn"
             onClick={() => setIsEditing(true)}
             aria-label="Edit task"
