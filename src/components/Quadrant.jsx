@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import TaskItem from './TaskItem'
 import './Quadrant.css'
+
+const TASK_DRAG_MIME_TYPE = 'application/x-graphtodo-task'
 
 function Quadrant({
   id,
@@ -19,6 +21,8 @@ function Quadrant({
 }) {
   const [input, setInput] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const addInputRef = useRef(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   function handleAdd(event) {
     event.preventDefault()
@@ -31,10 +35,62 @@ function Quadrant({
 
     setInput('')
     setErrorMessage('')
+    addInputRef.current?.focus()
+  }
+
+  function handleTaskDragStart(event, sourceQuadrantId, taskId) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(
+      TASK_DRAG_MIME_TYPE,
+      JSON.stringify({ sourceQuadrantId, taskId })
+    )
+  }
+
+  function handleDragOver(event) {
+    if (!event.dataTransfer.types.includes(TASK_DRAG_MIME_TYPE)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (!isDragOver) {
+      setIsDragOver(true)
+    }
+  }
+
+  function handleDragLeave(event) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragOver(false)
+    }
+  }
+
+  function handleDrop(event) {
+    event.preventDefault()
+    setIsDragOver(false)
+
+    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
+    if (!rawPayload) return
+
+    try {
+      const { sourceQuadrantId, taskId } = JSON.parse(rawPayload)
+      const result = onMoveTask(sourceQuadrantId, taskId, id)
+
+      if (!result.ok) {
+        setErrorMessage(result.error)
+        return
+      }
+
+      setErrorMessage('')
+    } catch {
+      setErrorMessage('Unable to move the dropped task.')
+    }
   }
 
   return (
-    <section className={`quadrant ${colorClass}`} aria-label={`${title} quadrant`}>
+    <section
+      className={`quadrant ${colorClass}${isDragOver ? ' drag-over' : ''}`}
+      aria-label={`${title} quadrant`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="quadrant-header">
         <h2>{title}</h2>
         <p>{subtitle}</p>
@@ -54,6 +110,8 @@ function Quadrant({
             onDelete={() => onDeleteTask(id, task.id)}
             onSave={(nextText) => onEditTask(id, task.id, nextText)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
+            onDragStart={handleTaskDragStart}
+            onDragEnd={() => setIsDragOver(false)}
           />
         ))}
       </ul>
@@ -65,6 +123,7 @@ function Quadrant({
           Add task to {title}
         </label>
         <input
+          ref={addInputRef}
           id={`add-${id}`}
           type="text"
           value={input}
