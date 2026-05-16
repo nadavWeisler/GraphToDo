@@ -5,6 +5,12 @@
   padding: 1.25rem 1.25rem 1rem;
   min-height: 260px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.quadrant.drag-over {
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.18), 0 10px 25px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
 }
 
 .quadrant-header {
@@ -120,9 +126,24 @@
   color: #991b1b;
 }
 
-/* Drag-and-drop target highlight */
-.quadrant.drag-over {
-  outline: 2px dashed rgba(0, 0, 0, 0.35);
-  outline-offset: -4px;
-  background-color: rgba(0, 0, 0, 0.04);
+@media (max-width: 640px) {
+  .quadrant {
+    min-height: 0;
+    padding: 1rem 0.9rem 0.85rem;
+  }
+
+  .task-list {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .add-task-form input {
+    min-height: 40px;
+    font-size: 0.9rem;
+  }
+
+  .add-task-form button {
+    width: 40px;
+    height: 40px;
+  }
 }
