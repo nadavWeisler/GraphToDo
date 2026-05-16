@@ -30,4 +30,5 @@ export const QUADRANTS = [
 
 export const QUADRANT_IDS = QUADRANTS.map(({ id }) => id)
 
-export const STORAGE_KEY = 'graphtodo.tasks.v1'
+export const STORAGE_KEY = 'graphtodo.state.v2'
+export const LEGACY_STORAGE_KEY = 'graphtodo.tasks.v1'

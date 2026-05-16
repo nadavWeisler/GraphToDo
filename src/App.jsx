@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
-import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY } from './quadrants'
+import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
@@ -166,21 +166,40 @@ function validateImportedTasksShape(data) {
   return next
 }
 
-function loadTasks() {
+function defaultConfig() {
+  return { hideCompleted: false }
+}
+
+function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return emptyTasks()
-    const parsed = JSON.parse(raw)
-    return validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const tasks = validateTasksShape(parsed.tasks) ?? emptyTasks()
+      const config = {
+        ...defaultConfig(),
+        ...(parsed.config && typeof parsed.config === 'object' ? parsed.config : {}),
+      }
+      return { tasks, config }
+    }
+
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const parsed = JSON.parse(legacy)
+      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+      return { tasks, config: defaultConfig() }
+    }
   } catch {
-    return emptyTasks()
+    // fall through to defaults
   }
+  return { tasks: emptyTasks(), config: defaultConfig() }
 }
 
 function App() {
-  const [tasks, setTasks] = useState(loadTasks)
+  const [initialState] = useState(loadState)
+  const [tasks, setTasks] = useState(initialState.tasks)
   const [searchQuery, setSearchQuery] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
@@ -192,8 +211,11 @@ function App() {
       return
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: compacted }))
-  }, [tasks])
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ tasks: compacted, config: { hideCompleted } })
+    )
+  }, [tasks, hideCompleted])
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
