@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { QUADRANTS, STORAGE_KEY } from './quadrants'
@@ -134,6 +134,45 @@ test('loads tasks from legacy storage keys and persists current quadrant ids', a
   expect(saved.tasks.q2).toBeUndefined()
 })
 
+test('removes emptied quadrants from persisted storage', async () => {
+  const [firstQuadrant, secondQuadrant] = QUADRANTS
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        [firstQuadrant.legacyId]: [{ id: 'task-1', text: 'Only item', done: false }],
+        [secondQuadrant.legacyId]: [{ id: 'task-2', text: 'Keep me', done: false }],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  await user.click(within(q1).getByRole('button', { name: 'Delete task' }))
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
+    expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
+    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null }])
+  })
+})
+
+test('clears storage key when all tasks are removed', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Finish report{enter}')
+  await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
+  await user.click(screen.getByRole('button', { name: 'Clear completed' }))
+
+  await waitFor(() => {
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+})
+
 test('shows validation error for duplicate tasks in same quadrant', async () => {
   const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
@@ -197,12 +236,15 @@ test('returns focus to the edit button when editing is cancelled', async () => {
 })
 
 test('imports valid JSON tasks and shows success message', async () => {
+  const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
   const { container } = render(<App />)
 
   const fileInput = container.querySelector('input[type="file"]')
+  const importTasks = Object.fromEntries(QUADRANTS.map(({ id }) => [id, []]))
+  importTasks[firstQuadrant.id] = [{ id: 'a', text: 'Plan sprint', done: false }]
   const file = new File(
-    [JSON.stringify({ tasks: { q1: [{ id: 'a', text: 'Plan sprint', done: false }], q2: [], q3: [], q4: [] } })],
+    [JSON.stringify({ tasks: importTasks })],
     'tasks.json',
     { type: 'application/json' }
   )
@@ -215,12 +257,15 @@ test('imports valid JSON tasks and shows success message', async () => {
 })
 
 test('shows actionable error when imported JSON schema is invalid', async () => {
+  const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
   const { container } = render(<App />)
 
   const fileInput = container.querySelector('input[type="file"]')
+  const importTasks = Object.fromEntries(QUADRANTS.map(({ id }) => [id, []]))
+  importTasks[firstQuadrant.id] = [{ id: 'a', done: false }]
   const file = new File(
-    [JSON.stringify({ tasks: { q1: [{ id: 'a', done: false }], q2: [], q3: [], q4: [] } })],
+    [JSON.stringify({ tasks: importTasks })],
     'invalid-tasks.json',
     { type: 'application/json' }
   )
@@ -228,7 +273,9 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
   await user.upload(fileInput, file)
 
   expect(
-    screen.getByText('Import failed: Task 1 in "q1" is missing a valid "text" string.')
+    screen.getByText(
+      `Import failed: Task 1 in "${firstQuadrant.id}" is missing a valid "text" string.`
+    )
   ).toBeTruthy()
 })
 
@@ -262,4 +309,56 @@ test('drag-over applies visual feedback class on quadrant', async () => {
 
   fireEvent.dragLeave(q2, { dataTransfer, relatedTarget: document.body })
   expect(q2.classList.contains('drag-over')).toBe(false)
+})
+
+test('can set and display a due date on a task', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Fix bug{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const dueDateInput = within(q1).getByLabelText('Due date')
+  await user.type(dueDateInput, '2099-12-31')
+
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  expect(within(q1).getByLabelText(/Due:/)).toBeTruthy()
+})
+
+test('sort by due date orders tasks within a quadrant', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    'graphtodo.tasks.v1',
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 'a', text: 'Later task', done: false, dueDate: '2099-12-31' },
+          { id: 'b', text: 'Earlier task', done: false, dueDate: '2099-06-01' },
+          { id: 'c', text: 'No date task', done: false, dueDate: null },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const sortCheckbox = screen.getByRole('checkbox', { name: 'Sort by due date' })
+  await user.click(sortCheckbox)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const items = within(q1).getAllByRole('listitem')
+  const texts = items.map((el) => el.textContent)
+
+  const earlierIdx = texts.findIndex((t) => t.includes('Earlier task'))
+  const laterIdx = texts.findIndex((t) => t.includes('Later task'))
+  const noDateIdx = texts.findIndex((t) => t.includes('No date task'))
+
+  expect(earlierIdx).toBeLessThan(laterIdx)
+  expect(laterIdx).toBeLessThan(noDateIdx)
 })
