@@ -5,6 +5,12 @@
   padding: 1.25rem 1.25rem 1rem;
   min-height: 260px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.quadrant.drag-over {
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.18), 0 10px 25px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
 }
 
 .quadrant-header {
@@ -151,4 +157,26 @@
   margin-top: 0.2rem;
   font-size: 0.72rem;
   color: #991b1b;
+}
+
+@media (max-width: 640px) {
+  .quadrant {
+    min-height: 0;
+    padding: 1rem 0.9rem 0.85rem;
+  }
+
+  .task-list {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .add-task-form input {
+    min-height: 40px;
+    font-size: 0.9rem;
+  }
+
+  .add-task-form button {
+    width: 40px;
+    height: 40px;
+  }
 }

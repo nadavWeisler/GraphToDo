@@ -6,10 +6,15 @@
   padding: 0.35rem 0.4rem;
   border-radius: 6px;
   transition: background 0.1s;
+  cursor: grab;
 }
 
 .task-item:hover {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.task-item:active {
+  cursor: grabbing;
 }
 
 .task-item.done .task-text {
@@ -54,32 +59,59 @@
   word-break: break-word;
 }
 
-.task-content {
+.task-text-area {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
 }
 
-.due-badge {
-  font-size: 0.68rem;
-  color: #6b7280;
+.due-date-badge {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  width: fit-content;
+  font-weight: 500;
 }
 
-.due-badge--overdue {
-  color: #dc2626;
-  font-weight: 600;
+.due-date-overdue {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
-.due-badge--due-today {
-  color: #d97706;
-  font-weight: 600;
+.due-date-today {
+  background: #fef3c7;
+  color: #92400e;
 }
 
-.due-badge--upcoming {
-  color: #6b7280;
+.due-date-soon {
+  background: #fef9c3;
+  color: #713f12;
 }
 
+.due-date-normal {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.task-text-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-text-btn:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 .edit-task-form {
   display: flex;
   flex-direction: column;
@@ -158,11 +190,40 @@
 @media (max-width: 720px) {
   .task-item {
     grid-template-columns: auto 1fr auto;
+    gap: 0.45rem;
+    padding: 0.45rem 0.35rem;
+  }
+
+  .toggle-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .task-text,
+  .edit-task-form {
+    grid-column: 2 / -1;
+  }
+
+  .edit-task-form {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    width: 100%;
+  }
+
+  .task-edit-input {
+    grid-column: 1 / -1;
+    min-width: 0;
+    min-height: 36px;
+  }
+
+  .delete-btn {
+    padding: 0.2rem 0.3rem;
   }
 
   .move-select,
   .task-action-btn {
     grid-column: 2 / -1;
-    width: fit-content;
+    width: 100%;
+    min-height: 34px;
   }
 }

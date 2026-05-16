@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import TaskItem from './TaskItem'
 import './Quadrant.css'
+
+const TASK_DRAG_MIME_TYPE = 'application/x-graphtodo-task'
 
 function Quadrant({
   id,
@@ -21,6 +23,8 @@ function Quadrant({
   const [addDueDate, setAddDueDate] = useState('')
   const [addDueTime, setAddDueTime] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
+  const addInputRef = useRef(null)
+  const [isDragOver, setIsDragOver] = useState(false)
 
   function handleAdd(event) {
     event.preventDefault()
@@ -35,10 +39,62 @@ function Quadrant({
     setAddDueDate('')
     setAddDueTime('')
     setErrorMessage('')
+    addInputRef.current?.focus()
+  }
+
+  function handleTaskDragStart(event, sourceQuadrantId, taskId) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(
+      TASK_DRAG_MIME_TYPE,
+      JSON.stringify({ sourceQuadrantId, taskId })
+    )
+  }
+
+  function handleDragOver(event) {
+    if (!event.dataTransfer.types.includes(TASK_DRAG_MIME_TYPE)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (!isDragOver) {
+      setIsDragOver(true)
+    }
+  }
+
+  function handleDragLeave(event) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setIsDragOver(false)
+    }
+  }
+
+  function handleDrop(event) {
+    event.preventDefault()
+    setIsDragOver(false)
+
+    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
+    if (!rawPayload) return
+
+    try {
+      const { sourceQuadrantId, taskId } = JSON.parse(rawPayload)
+      const result = onMoveTask(sourceQuadrantId, taskId, id)
+
+      if (!result.ok) {
+        setErrorMessage(result.error)
+        return
+      }
+
+      setErrorMessage('')
+    } catch {
+      setErrorMessage('Unable to move the dropped task.')
+    }
   }
 
   return (
-    <section className={`quadrant ${colorClass}`} aria-label={`${title} quadrant`}>
+    <section
+      className={`quadrant ${colorClass}${isDragOver ? ' drag-over' : ''}`}
+      aria-label={`${title} quadrant`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="quadrant-header">
         <h2>{title}</h2>
         <p>{subtitle}</p>
@@ -56,10 +112,10 @@ function Quadrant({
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}
-          onSave={(nextText, nextDueDate, nextDueTime) =>
-            onEditTask(id, task.id, nextText, nextDueDate, nextDueTime)
-          }
+            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
+            onDragStart={handleTaskDragStart}
+            onDragEnd={() => setIsDragOver(false)}
           />
         ))}
       </ul>
@@ -72,6 +128,7 @@ function Quadrant({
             Add task to {title}
           </label>
           <input
+            ref={addInputRef}
             id={`add-${id}`}
             type="text"
             value={input}
@@ -83,21 +140,21 @@ function Quadrant({
           <button type="submit" aria-label={`Add task to ${title}`}>+</button>
         </div>
         <div className="add-task-date-row">
-          <label className="sr-only" htmlFor={`add-due-date-${id}`}>Due date</label>
+          <label className="sr-only" htmlFor={`add-due-date-${id}`}>New task due date</label>
           <input
             id={`add-due-date-${id}`}
             type="date"
             value={addDueDate}
             onChange={(event) => setAddDueDate(event.target.value)}
-            aria-label="Due date"
+            aria-label="New task due date"
           />
-          <label className="sr-only" htmlFor={`add-due-time-${id}`}>Due time</label>
+          <label className="sr-only" htmlFor={`add-due-time-${id}`}>New task due time</label>
           <input
             id={`add-due-time-${id}`}
             type="time"
             value={addDueTime}
             onChange={(event) => setAddDueTime(event.target.value)}
-            aria-label="Due time"
+            aria-label="New task due time"
             disabled={!addDueDate}
           />
         </div>

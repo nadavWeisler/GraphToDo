@@ -1,26 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
 
-function getTodayString() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getDateStatus(dueDate) {
+function formatDueDateLabel(dueDate, dueTime) {
   if (!dueDate) return null
-  const todayStr = getTodayString()
-  if (dueDate < todayStr) return 'overdue'
-  if (dueDate === todayStr) return 'due-today'
-  return 'upcoming'
-}
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDate + 'T00:00:00')
+  if (isNaN(due.getTime())) return null
+  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+  const timeStr = dueTime ? ` ${dueTime}` : ''
 
-function formatDueDate(dueDate, dueTime) {
-  const date = new Date(`${dueDate}T00:00:00`)
-  const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  return dueTime ? `${dateStr} ${dueTime}` : dateStr
+  if (diffDays < 0) return { label: `Overdue${timeStr}`, urgency: 'overdue' }
+  if (diffDays === 0) return { label: `Today${timeStr}`, urgency: 'today' }
+  if (diffDays === 1) return { label: `Tomorrow${timeStr}`, urgency: 'soon' }
+  if (diffDays <= 3) return { label: `${diffDays} days${timeStr}`, urgency: 'soon' }
+  return {
+    label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + timeStr,
+    urgency: 'normal',
+  }
 }
 
 function TaskItem({
@@ -31,21 +29,39 @@ function TaskItem({
   onDelete,
   onSave,
   onMove,
+  onDragStart,
+  onDragEnd,
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
-  const [draftDueDate, setDraftDueDate] = useState(task.dueDate || '')
-  const [draftDueTime, setDraftDueTime] = useState(task.dueTime || '')
+  const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
+  const [draftDueTime, setDraftDueTime] = useState(task.dueTime ?? '')
   const [errorMessage, setErrorMessage] = useState('')
+  const editInputRef = useRef(null)
+  const editButtonRef = useRef(null)
+  const shouldRestoreFocusRef = useRef(false)
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus()
+      return
+    }
+
+    if (shouldRestoreFocusRef.current) {
+      editButtonRef.current?.focus()
+      shouldRestoreFocusRef.current = false
+    }
+  }, [isEditing])
 
   function handleSave(event) {
     event.preventDefault()
-    const result = onSave(draftText, draftDueDate || null, draftDueTime || null)
+    const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null })
     if (!result.ok) {
       setErrorMessage(result.error)
       return
     }
 
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -63,16 +79,28 @@ function TaskItem({
 
   function handleCancel() {
     setDraftText(task.text)
-    setDraftDueDate(task.dueDate || '')
-    setDraftDueTime(task.dueTime || '')
+    setDraftDueDate(task.dueDate ?? '')
+    setDraftDueTime(task.dueTime ?? '')
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
 
-  const dateStatus = getDateStatus(task.dueDate)
+  const dueDateInfo = formatDueDateLabel(task.dueDate, task.dueTime)
+  const ariaLabelSuffix =
+    dueDateInfo?.urgency === 'overdue'
+      ? ' (overdue)'
+      : dueDateInfo?.urgency === 'today'
+        ? ' (due today)'
+        : ''
 
   return (
-    <li className={`task-item${task.done ? ' done' : ''}`}>
+    <li
+      className={`task-item${task.done ? ' done' : ''}`}
+      draggable={!isEditing}
+      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
+      onDragEnd={onDragEnd}
+    >
       <button
         className="toggle-btn"
         onClick={onToggle}
@@ -86,13 +114,13 @@ function TaskItem({
           <div className="edit-row">
             <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
             <input
+              ref={editInputRef}
               id={`edit-${task.id}`}
               className="task-edit-input"
               type="text"
               value={draftText}
               onChange={(event) => setDraftText(event.target.value)}
               maxLength={120}
-              autoFocus
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   handleCancel()
@@ -126,18 +154,26 @@ function TaskItem({
             />
           </div>
         </form>
+      ) : task.done ? (
+        <button
+          type="button"
+          className="task-text task-text-btn"
+          onClick={onToggle}
+          aria-label={`Reopen task: ${task.text}`}
+        >
+          {task.text}
+        </button>
       ) : (
-        <div className="task-content">
+        <div className="task-text-area">
           <span className="task-text">{task.text}</span>
-          {task.dueDate ? (
+          {dueDateInfo && (
             <span
-              className={`due-badge due-badge--${dateStatus}`}
-              aria-label={`Due: ${formatDueDate(task.dueDate, task.dueTime)}${dateStatus === 'overdue' ? ' (overdue)' : dateStatus === 'due-today' ? ' (due today)' : ''}`}
+              className={`due-date-badge due-date-${dueDateInfo.urgency}`}
+              aria-label={`Due: ${dueDateInfo.label}${ariaLabelSuffix}`}
             >
-              {dateStatus === 'overdue' ? '⚠\uFE0E ' : '📅\uFE0E '}
-              {formatDueDate(task.dueDate, task.dueTime)}
+              📅 {dueDateInfo.label}
             </span>
-          ) : null}
+          )}
         </div>
       )}
 
@@ -159,6 +195,7 @@ function TaskItem({
           </select>
 
           <button
+            ref={editButtonRef}
             className="task-action-btn"
             onClick={() => setIsEditing(true)}
             aria-label="Edit task"
