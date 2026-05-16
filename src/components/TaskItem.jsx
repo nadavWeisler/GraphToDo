@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
 
-function formatDueDate(dateString) {
-  if (!dateString) return null
-  // Only accept YYYY-MM-DD format (as produced by <input type="date">)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null
+function formatDueDateLabel(dueDate, dueTime) {
+  if (!dueDate) return null
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const due = new Date(dateString + 'T00:00:00')
+  const due = new Date(dueDate + 'T00:00:00')
   if (isNaN(due.getTime())) return null
   const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+  const timeStr = dueTime ? ` ${dueTime}` : ''
 
-  if (diffDays < 0) return { label: 'Overdue', urgency: 'overdue' }
-  if (diffDays === 0) return { label: 'Today', urgency: 'today' }
-  if (diffDays === 1) return { label: 'Tomorrow', urgency: 'soon' }
-  if (diffDays <= 3) return { label: `${diffDays} days`, urgency: 'soon' }
+  if (diffDays < 0) return { label: `Overdue${timeStr}`, urgency: 'overdue' }
+  if (diffDays === 0) return { label: `Today${timeStr}`, urgency: 'today' }
+  if (diffDays === 1) return { label: `Tomorrow${timeStr}`, urgency: 'soon' }
+  if (diffDays <= 3) return { label: `${diffDays} days${timeStr}`, urgency: 'soon' }
   return {
-    label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + timeStr,
     urgency: 'normal',
   }
 }
@@ -35,6 +35,7 @@ function TaskItem({
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
+  const [draftDueTime, setDraftDueTime] = useState(task.dueTime ?? '')
   const [errorMessage, setErrorMessage] = useState('')
   const editInputRef = useRef(null)
   const editButtonRef = useRef(null)
@@ -54,7 +55,7 @@ function TaskItem({
 
   function handleSave(event) {
     event.preventDefault()
-    const result = onSave({ text: draftText, dueDate: draftDueDate || null })
+    const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null })
     if (!result.ok) {
       setErrorMessage(result.error)
       return
@@ -79,12 +80,19 @@ function TaskItem({
   function handleCancel() {
     setDraftText(task.text)
     setDraftDueDate(task.dueDate ?? '')
+    setDraftDueTime(task.dueTime ?? '')
     shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
 
-  const dueDateInfo = formatDueDate(task.dueDate)
+  const dueDateInfo = formatDueDateLabel(task.dueDate, task.dueTime)
+  const ariaLabelSuffix =
+    dueDateInfo?.urgency === 'overdue'
+      ? ' (overdue)'
+      : dueDateInfo?.urgency === 'today'
+        ? ' (due today)'
+        : ''
 
   return (
     <li
@@ -103,33 +111,48 @@ function TaskItem({
 
       {isEditing ? (
         <form className="edit-task-form" onSubmit={handleSave}>
-          <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
-          <input
-            ref={editInputRef}
-            id={`edit-${task.id}`}
-            className="task-edit-input"
-            type="text"
-            value={draftText}
-            onChange={(event) => setDraftText(event.target.value)}
-            maxLength={120}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                handleCancel()
-              }
-            }}
-          />
-          <label className="sr-only" htmlFor={`due-${task.id}`}>Due date</label>
-          <input
-            id={`due-${task.id}`}
-            className="task-due-input"
-            type="date"
-            value={draftDueDate}
-            onChange={(event) => setDraftDueDate(event.target.value)}
-          />
-          <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
-          <button type="button" className="task-action-btn" onClick={handleCancel}>
-            Cancel
-          </button>
+          <div className="edit-row">
+            <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
+            <input
+              ref={editInputRef}
+              id={`edit-${task.id}`}
+              className="task-edit-input"
+              type="text"
+              value={draftText}
+              onChange={(event) => setDraftText(event.target.value)}
+              maxLength={120}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  handleCancel()
+                }
+              }}
+            />
+            <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
+            <button type="button" className="task-action-btn" onClick={handleCancel}>
+              Cancel
+            </button>
+          </div>
+          <div className="edit-row">
+            <label className="sr-only" htmlFor={`edit-due-date-${task.id}`}>Due date</label>
+            <input
+              id={`edit-due-date-${task.id}`}
+              className="task-date-input"
+              type="date"
+              value={draftDueDate}
+              onChange={(event) => setDraftDueDate(event.target.value)}
+              aria-label="Due date"
+            />
+            <label className="sr-only" htmlFor={`edit-due-time-${task.id}`}>Due time</label>
+            <input
+              id={`edit-due-time-${task.id}`}
+              className="task-date-input"
+              type="time"
+              value={draftDueTime}
+              onChange={(event) => setDraftDueTime(event.target.value)}
+              aria-label="Due time"
+              disabled={!draftDueDate}
+            />
+          </div>
         </form>
       ) : task.done ? (
         <button
@@ -146,7 +169,7 @@ function TaskItem({
           {dueDateInfo && (
             <span
               className={`due-date-badge due-date-${dueDateInfo.urgency}`}
-              aria-label={`Due: ${dueDateInfo.label}`}
+              aria-label={`Due: ${dueDateInfo.label}${ariaLabelSuffix}`}
             >
               📅 {dueDateInfo.label}
             </span>

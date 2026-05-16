@@ -24,8 +24,8 @@ function normalizeText(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-function createTask(text) {
-  return { id: crypto.randomUUID(), text, done: false, dueDate: null }
+function createTask(text, dueDate = null, dueTime = null) {
+  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime }
 }
 
 function isValidTask(task) {
@@ -34,7 +34,8 @@ function isValidTask(task) {
     typeof task.id === 'string' &&
     typeof task.text === 'string' &&
     typeof task.done === 'boolean' &&
-    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string')
+    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
+    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string')
   )
 }
 
@@ -46,6 +47,7 @@ function sanitizeTask(task) {
     text,
     done: task.done,
     dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
+    dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
   }
 }
 
@@ -145,6 +147,7 @@ function validateImportedTasksShape(data) {
         done: task.done,
         id: task.id.trim(),
         dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
+        dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
       })
     }
 
@@ -234,7 +237,7 @@ function App() {
     return next
   }, [hideCompleted, normalizedSearch, sortByDueDate, tasks])
 
-  function handleAddTask(quadrantId, text) {
+  function handleAddTask(quadrantId, text, dueDate = null, dueTime = null) {
     const cleanText = normalizeText(text)
 
     if (!cleanText) {
@@ -251,7 +254,7 @@ function App() {
 
     setTasks((prev) => ({
       ...prev,
-      [quadrantId]: [...prev[quadrantId], createTask(cleanText)],
+      [quadrantId]: [...prev[quadrantId], createTask(cleanText, dueDate || null, dueTime || null)],
     }))
 
     return { ok: true }
@@ -273,7 +276,7 @@ function App() {
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText, nextDueDate = null) {
+  function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null) {
     const cleanText = normalizeText(nextText)
 
     if (!cleanText) {
@@ -291,7 +294,9 @@ function App() {
     setTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
-        task.id === taskId ? { ...task, text: cleanText, dueDate: nextDueDate } : task
+        task.id === taskId
+          ? { ...task, text: cleanText, dueDate: dueDate || null, dueTime: dueTime || null }
+          : task
       ),
     }))
 
