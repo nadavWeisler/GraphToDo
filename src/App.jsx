@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
-import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY } from './quadrants'
+import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
@@ -177,37 +177,52 @@ function validateImportedTasksShape(data) {
   return next
 }
 
-function loadTasks() {
+function defaultConfig() {
+  return { hideCompleted: false }
+}
+
+function loadState() {
   if (!canUseLocalStorage()) {
-    return { tasks: emptyTasks(), storageAvailable: false }
+    return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: false }
   }
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { tasks: emptyTasks(), storageAvailable: true }
-    const parsed = JSON.parse(raw)
-    return {
-      tasks: validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks(),
-      storageAvailable: true,
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+      const config = {
+        ...defaultConfig(),
+        ...(parsed.config && typeof parsed.config === 'object' ? parsed.config : {}),
+      }
+      return { tasks, config, storageAvailable: true }
+    }
+
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (legacy) {
+      const parsed = JSON.parse(legacy)
+      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+      return { tasks, config: defaultConfig(), storageAvailable: true }
     }
   } catch {
-    return { tasks: emptyTasks(), storageAvailable: true }
+    // fall through to defaults
   }
+  return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: true }
 }
 
 function App() {
-  const [initialStorageState] = useState(loadTasks)
-  const [tasks, setTasks] = useState(initialStorageState.tasks)
+  const [initialState] = useState(loadState)
+  const [tasks, setTasks] = useState(initialState.tasks)
   const [storageAvailable, setStorageAvailable] = useState(
-    initialStorageState.storageAvailable
+    initialState.storageAvailable
   )
   const [searchQuery, setSearchQuery] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(false)
+  const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
-  function persistTasks(nextTasks) {
+  function persistState(nextTasks, nextHideCompleted = hideCompleted) {
     if (!storageAvailable) return
     try {
       const compacted = compactTasks(nextTasks)
@@ -215,7 +230,10 @@ function App() {
         localStorage.removeItem(STORAGE_KEY)
         return
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: compacted }))
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks: compacted, config: { hideCompleted: nextHideCompleted } })
+      )
     } catch {
       setStorageAvailable(false)
     }
@@ -224,7 +242,7 @@ function App() {
   function updateTasks(nextOrUpdater) {
     setTasks((prev) => {
       const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(prev) : nextOrUpdater
-      persistTasks(next)
+      persistState(next)
       return next
     })
   }
@@ -424,7 +442,11 @@ function App() {
             id="hide-completed"
             type="checkbox"
             checked={hideCompleted}
-            onChange={(event) => setHideCompleted(event.target.checked)}
+            onChange={(event) => {
+              const nextHideCompleted = event.target.checked
+              setHideCompleted(nextHideCompleted)
+              persistState(tasks, nextHideCompleted)
+            }}
           />
           <span>Hide completed</span>
         </label>

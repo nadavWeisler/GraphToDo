@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import App from './App'
-import { QUADRANTS, STORAGE_KEY } from './quadrants'
+import { QUADRANTS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 
 function getQuadrantByLabel(label) {
   return screen.getByRole('region', { name: `${label} quadrant` })
@@ -174,6 +174,43 @@ test('clears storage key when all tasks are removed', async () => {
   })
 })
 
+test('persists config flags alongside tasks in state.v2 format', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Config test{enter}')
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(saved).toHaveProperty('tasks')
+  expect(saved).toHaveProperty('config')
+  expect(typeof saved.config).toBe('object')
+})
+
+test('loads hideCompleted config from storage', async () => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Active task', done: false },
+          { id: 't3', text: 'Done in q1', done: true },
+        ],
+        q2: [{ id: 't2', text: 'Done task', done: true }],
+        q3: [],
+        q4: [],
+      },
+      config: { hideCompleted: true },
+    })
+  )
+
+  render(<App />)
+
+  expect(within(getQuadrantByLabel('Do First')).getByText('Active task')).toBeTruthy()
+  expect(within(getQuadrantByLabel('Do First')).queryByText('Done in q1')).toBeNull()
+  expect(within(getQuadrantByLabel('Schedule')).queryByText('Done task')).toBeNull()
+})
+
 test('shows validation error for duplicate tasks in same quadrant', async () => {
   const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
@@ -323,6 +360,38 @@ test('falls back to in-memory tasks when localStorage is unavailable', async () 
   }
 })
 
+test('drag-over applies visual feedback class on quadrant', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Highlight test{enter}')
+
+  const taskItem = within(q1).getByText('Highlight test').closest('li')
+  const q2 = getQuadrantByLabel('Schedule')
+
+  const dragData = new Map()
+  const dataTransfer = {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    types: [],
+    setData(type, value) {
+      dragData.set(type, value)
+      this.types = [...dragData.keys()]
+    },
+    getData(type) {
+      return dragData.get(type) ?? ''
+    },
+  }
+
+  fireEvent.dragStart(taskItem, { dataTransfer })
+  fireEvent.dragOver(q2, { dataTransfer })
+  expect(q2.classList.contains('drag-over')).toBe(true)
+
+  fireEvent.dragLeave(q2, { dataTransfer, relatedTarget: document.body })
+  expect(q2.classList.contains('drag-over')).toBe(false)
+})
+
 test('can set and display a due date on a task', async () => {
   const user = userEvent.setup()
   render(<App />)
@@ -343,7 +412,7 @@ test('can set and display a due date on a task', async () => {
 test('sort by due date orders tasks within a quadrant', async () => {
   const user = userEvent.setup()
   localStorage.setItem(
-    'graphtodo.tasks.v1',
+    LEGACY_STORAGE_KEY,
     JSON.stringify({
       tasks: {
         q1: [
@@ -393,7 +462,7 @@ test('adds a task with a due date and shows it in the task list', async () => {
 
 test('shows overdue indicator for tasks with a past due date', async () => {
   localStorage.setItem(
-    'graphtodo.tasks.v1',
+    LEGACY_STORAGE_KEY,
     JSON.stringify({
       tasks: {
         q1: [{ id: 'task1', text: 'Old task', done: false, dueDate: '2000-01-01', dueTime: null }],
@@ -419,7 +488,7 @@ test('shows due-today indicator for tasks due today', async () => {
   ].join('-')
 
   localStorage.setItem(
-    'graphtodo.tasks.v1',
+    LEGACY_STORAGE_KEY,
     JSON.stringify({
       tasks: {
         q1: [{ id: 'task2', text: 'Due today task', done: false, dueDate: todayStr, dueTime: null }],
