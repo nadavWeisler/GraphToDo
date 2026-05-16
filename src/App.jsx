@@ -1,45 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
-
-const QUADRANTS = [
-  {
-    id: 'q1',
-    colorClass: 'q1',
-    title: 'Do First',
-    subtitle: 'Urgent & Important',
-  },
-  {
-    id: 'q2',
-    colorClass: 'q2',
-    title: 'Schedule',
-    subtitle: 'Not Urgent & Important',
-  },
-  {
-    id: 'q3',
-    colorClass: 'q3',
-    title: 'Delegate',
-    subtitle: 'Urgent & Not Important',
-  },
-  {
-    id: 'q4',
-    colorClass: 'q4',
-    title: 'Eliminate',
-    subtitle: 'Not Urgent & Not Important',
-  },
-]
-
-const STORAGE_KEY = 'graphtodo.tasks.v1'
+import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
 function emptyTasks() {
-  return {
-    q1: [],
-    q2: [],
-    q3: [],
-    q4: [],
-  }
+  return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
 }
 
 function normalizeText(value) {
@@ -87,13 +54,84 @@ function validateTasksShape(data) {
   if (!data || typeof data !== 'object') return null
   const next = emptyTasks()
 
-  for (const { id } of QUADRANTS) {
-    if (!Array.isArray(data[id])) return null
+  for (const { id, legacyId } of QUADRANTS) {
+    let quadrantTasks = null
 
-    const sanitized = data[id]
+    if (Array.isArray(data[id])) {
+      quadrantTasks = data[id]
+    } else if (Array.isArray(data[legacyId])) {
+      quadrantTasks = data[legacyId]
+    }
+
+    if (!Array.isArray(quadrantTasks)) return null
+
+    const sanitized = quadrantTasks
       .filter(isValidTask)
       .map(sanitizeTask)
       .filter(Boolean)
+
+    const deduped = []
+    const seen = new Set()
+    for (const task of sanitized) {
+      const key = normalizeText(task.text).toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      deduped.push(task)
+    }
+
+    next[id] = deduped
+  }
+
+  return next
+}
+
+function validateImportedTasksShape(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Expected an object with q1, q2, q3, and q4 arrays.')
+  }
+
+  const next = emptyTasks()
+
+  for (const { id, legacyId } of QUADRANTS) {
+    const dataKey = id in data ? id : legacyId in data ? legacyId : null
+    if (!dataKey) {
+      throw new Error(`Missing required quadrant "${id}".`)
+    }
+
+    if (!Array.isArray(data[dataKey])) {
+      throw new Error(`Quadrant "${dataKey}" must be an array of tasks.`)
+    }
+
+    const sanitized = []
+    for (const [index, task] of data[dataKey].entries()) {
+      if (!task || typeof task !== 'object' || Array.isArray(task)) {
+        throw new Error(`Task ${index + 1} in "${dataKey}" must be an object.`)
+      }
+
+      if (typeof task.id !== 'string' || !task.id.trim()) {
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "id" string.`)
+      }
+
+      if (typeof task.text !== 'string') {
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "text" string.`)
+      }
+
+      if (!normalizeText(task.text)) {
+        throw new Error(`Task ${index + 1} in "${dataKey}" must have non-empty "text".`)
+      }
+
+      if (typeof task.done !== 'boolean') {
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "done" boolean.`)
+      }
+
+      const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
+      sanitized.push({
+        text,
+        done: task.done,
+        id: task.id.trim(),
+        dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
+      })
+    }
 
     const deduped = []
     const seen = new Set()
@@ -237,12 +275,15 @@ function App() {
   }
 
   function handleClearCompleted() {
-    setTasks((prev) => ({
-      q1: prev.q1.filter((task) => !task.done),
-      q2: prev.q2.filter((task) => !task.done),
-      q3: prev.q3.filter((task) => !task.done),
-      q4: prev.q4.filter((task) => !task.done),
-    }))
+    setTasks((prev) => {
+      const next = emptyTasks()
+
+      for (const id of QUADRANT_IDS) {
+        next[id] = prev[id].filter((task) => !task.done)
+      }
+
+      return next
+    })
     setStatusMessage('Completed tasks cleared.')
   }
 
@@ -272,17 +313,22 @@ function App() {
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
-      const imported = validateTasksShape(parsed.tasks ?? parsed)
-
-      if (!imported) {
-        setStatusMessage('Import failed: invalid GraphToDo JSON format.')
-        return
-      }
+      const imported = validateImportedTasksShape(parsed.tasks ?? parsed)
 
       setTasks(imported)
       setStatusMessage('Tasks imported successfully.')
-    } catch {
-      setStatusMessage('Import failed: unable to parse JSON.')
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        setStatusMessage('Import failed: invalid JSON syntax. Please upload a valid .json file.')
+        return
+      }
+
+      if (error instanceof Error) {
+        setStatusMessage(`Import failed: ${error.message}`)
+        return
+      }
+
+      setStatusMessage('Import failed: unable to process this file.')
     } finally {
       if (importInputRef.current) {
         importInputRef.current.value = ''

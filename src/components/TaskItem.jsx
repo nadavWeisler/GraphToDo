@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
 
 function formatDueDate(dateString) {
@@ -29,11 +29,28 @@ function TaskItem({
   onDelete,
   onSave,
   onMove,
+  onDragStart,
+  onDragEnd,
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
   const [errorMessage, setErrorMessage] = useState('')
+  const editInputRef = useRef(null)
+  const editButtonRef = useRef(null)
+  const shouldRestoreFocusRef = useRef(false)
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus()
+      return
+    }
+
+    if (shouldRestoreFocusRef.current) {
+      editButtonRef.current?.focus()
+      shouldRestoreFocusRef.current = false
+    }
+  }, [isEditing])
 
   function handleSave(event) {
     event.preventDefault()
@@ -43,6 +60,7 @@ function TaskItem({
       return
     }
 
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -61,6 +79,7 @@ function TaskItem({
   function handleCancel() {
     setDraftText(task.text)
     setDraftDueDate(task.dueDate ?? '')
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -68,7 +87,12 @@ function TaskItem({
   const dueDateInfo = formatDueDate(task.dueDate)
 
   return (
-    <li className={`task-item${task.done ? ' done' : ''}`}>
+    <li
+      className={`task-item${task.done ? ' done' : ''}`}
+      draggable={!isEditing}
+      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
+      onDragEnd={onDragEnd}
+    >
       <button
         className="toggle-btn"
         onClick={onToggle}
@@ -81,13 +105,13 @@ function TaskItem({
         <form className="edit-task-form" onSubmit={handleSave}>
           <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
           <input
+            ref={editInputRef}
             id={`edit-${task.id}`}
             className="task-edit-input"
             type="text"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
             maxLength={120}
-            autoFocus
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 handleCancel()
@@ -107,6 +131,15 @@ function TaskItem({
             Cancel
           </button>
         </form>
+      ) : task.done ? (
+        <button
+          type="button"
+          className="task-text task-text-btn"
+          onClick={onToggle}
+          aria-label={`Reopen task: ${task.text}`}
+        >
+          {task.text}
+        </button>
       ) : (
         <div className="task-text-area">
           <span className="task-text">{task.text}</span>
@@ -139,6 +172,7 @@ function TaskItem({
           </select>
 
           <button
+            ref={editButtonRef}
             className="task-action-btn"
             onClick={() => setIsEditing(true)}
             aria-label="Edit task"
