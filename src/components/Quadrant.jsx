@@ -20,13 +20,15 @@ function Quadrant({
   onMoveTask,
 }) {
   const [input, setInput] = useState('')
+  const [addDueDate, setAddDueDate] = useState('')
+  const [addDueTime, setAddDueTime] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const addInputRef = useRef(null)
   const [isDragOver, setIsDragOver] = useState(false)
 
   function handleAdd(event) {
     event.preventDefault()
-    const result = onAddTask(id, input)
+    const result = onAddTask(id, input, addDueDate || null, addDueTime || null)
 
     if (!result.ok) {
       setErrorMessage(result.error)
@@ -34,6 +36,8 @@ function Quadrant({
     }
 
     setInput('')
+    setAddDueDate('')
+    setAddDueTime('')
     setErrorMessage('')
     addInputRef.current?.focus()
   }
@@ -108,7 +112,7 @@ function Quadrant({
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}
-            onSave={(nextText) => onEditTask(id, task.id, nextText)}
+            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
             onDragStart={handleTaskDragStart}
             onDragEnd={() => setIsDragOver(false)}
@@ -119,20 +123,41 @@ function Quadrant({
       {!tasks.length ? <p className="empty-message">No tasks match this view.</p> : null}
 
       <form className="add-task-form" onSubmit={handleAdd}>
-        <label className="sr-only" htmlFor={`add-${id}`}>
-          Add task to {title}
-        </label>
-        <input
-          ref={addInputRef}
-          id={`add-${id}`}
-          type="text"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Add a task…"
-          {...(errorMessage ? { 'aria-describedby': `error-${id}` } : {})}
-          maxLength={120}
-        />
-        <button type="submit" aria-label={`Add task to ${title}`}>+</button>
+        <div className="add-task-row">
+          <label className="sr-only" htmlFor={`add-${id}`}>
+            Add task to {title}
+          </label>
+          <input
+            ref={addInputRef}
+            id={`add-${id}`}
+            type="text"
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Add a task…"
+            {...(errorMessage ? { 'aria-describedby': `error-${id}` } : {})}
+            maxLength={120}
+          />
+          <button type="submit" aria-label={`Add task to ${title}`}>+</button>
+        </div>
+        <div className="add-task-date-row">
+          <label className="sr-only" htmlFor={`add-due-date-${id}`}>New task due date</label>
+          <input
+            id={`add-due-date-${id}`}
+            type="date"
+            value={addDueDate}
+            onChange={(event) => setAddDueDate(event.target.value)}
+            aria-label="New task due date"
+          />
+          <label className="sr-only" htmlFor={`add-due-time-${id}`}>New task due time</label>
+          <input
+            id={`add-due-time-${id}`}
+            type="time"
+            value={addDueTime}
+            onChange={(event) => setAddDueTime(event.target.value)}
+            aria-label="New task due time"
+            disabled={!addDueDate}
+          />
+        </div>
       </form>
 
       <p className="input-error" id={`error-${id}`} role="status" aria-live="polite">

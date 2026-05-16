@@ -82,11 +82,22 @@
 /* Add task form */
 .add-task-form {
   display: flex;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.35rem;
   margin-top: 0.75rem;
 }
 
-.add-task-form input {
+.add-task-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.add-task-date-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.add-task-form input[type="text"] {
   flex: 1;
   padding: 0.4rem 0.6rem;
   border: 1px solid rgba(0, 0, 0, 0.2);
@@ -97,9 +108,31 @@
   transition: border-color 0.15s;
 }
 
-.add-task-form input:focus {
+.add-task-form input[type="text"]:focus {
   border-color: rgba(0, 0, 0, 0.4);
   background: #fff;
+}
+
+.add-task-form input[type="date"],
+.add-task-form input[type="time"] {
+  padding: 0.3rem 0.45rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.7);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.add-task-form input[type="date"]:focus,
+.add-task-form input[type="time"]:focus {
+  border-color: rgba(0, 0, 0, 0.4);
+  background: #fff;
+}
+
+.add-task-form input[type="time"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .add-task-form button {
