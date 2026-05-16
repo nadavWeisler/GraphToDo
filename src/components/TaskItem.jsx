@@ -1,5 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
+
+function formatDueDate(dateString) {
+  if (!dateString) return null
+  // Only accept YYYY-MM-DD format (as produced by <input type="date">)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dateString + 'T00:00:00')
+  if (isNaN(due.getTime())) return null
+  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+
+  if (diffDays < 0) return { label: 'Overdue', urgency: 'overdue' }
+  if (diffDays === 0) return { label: 'Today', urgency: 'today' }
+  if (diffDays === 1) return { label: 'Tomorrow', urgency: 'soon' }
+  if (diffDays <= 3) return { label: `${diffDays} days`, urgency: 'soon' }
+  return {
+    label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    urgency: 'normal',
+  }
+}
 
 function TaskItem({
   task,
@@ -9,19 +29,38 @@ function TaskItem({
   onDelete,
   onSave,
   onMove,
+  onDragStart,
+  onDragEnd,
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
+  const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
   const [errorMessage, setErrorMessage] = useState('')
+  const editInputRef = useRef(null)
+  const editButtonRef = useRef(null)
+  const shouldRestoreFocusRef = useRef(false)
+
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus()
+      return
+    }
+
+    if (shouldRestoreFocusRef.current) {
+      editButtonRef.current?.focus()
+      shouldRestoreFocusRef.current = false
+    }
+  }, [isEditing])
 
   function handleSave(event) {
     event.preventDefault()
-    const result = onSave(draftText)
+    const result = onSave({ text: draftText, dueDate: draftDueDate || null })
     if (!result.ok) {
       setErrorMessage(result.error)
       return
     }
 
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
@@ -39,12 +78,21 @@ function TaskItem({
 
   function handleCancel() {
     setDraftText(task.text)
+    setDraftDueDate(task.dueDate ?? '')
+    shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
   }
 
+  const dueDateInfo = formatDueDate(task.dueDate)
+
   return (
-    <li className={`task-item${task.done ? ' done' : ''}`}>
+    <li
+      className={`task-item${task.done ? ' done' : ''}`}
+      draggable={!isEditing}
+      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
+      onDragEnd={onDragEnd}
+    >
       <button
         className="toggle-btn"
         onClick={onToggle}
@@ -57,26 +105,53 @@ function TaskItem({
         <form className="edit-task-form" onSubmit={handleSave}>
           <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
           <input
+            ref={editInputRef}
             id={`edit-${task.id}`}
             className="task-edit-input"
             type="text"
             value={draftText}
             onChange={(event) => setDraftText(event.target.value)}
             maxLength={120}
-            autoFocus
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 handleCancel()
               }
             }}
           />
+          <label className="sr-only" htmlFor={`due-${task.id}`}>Due date</label>
+          <input
+            id={`due-${task.id}`}
+            className="task-due-input"
+            type="date"
+            value={draftDueDate}
+            onChange={(event) => setDraftDueDate(event.target.value)}
+          />
           <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
           <button type="button" className="task-action-btn" onClick={handleCancel}>
             Cancel
           </button>
         </form>
+      ) : task.done ? (
+        <button
+          type="button"
+          className="task-text task-text-btn"
+          onClick={onToggle}
+          aria-label={`Reopen task: ${task.text}`}
+        >
+          {task.text}
+        </button>
       ) : (
-        <span className="task-text">{task.text}</span>
+        <div className="task-text-area">
+          <span className="task-text">{task.text}</span>
+          {dueDateInfo && (
+            <span
+              className={`due-date-badge due-date-${dueDateInfo.urgency}`}
+              aria-label={`Due: ${dueDateInfo.label}`}
+            >
+              📅 {dueDateInfo.label}
+            </span>
+          )}
+        </div>
       )}
 
       {!isEditing ? (
@@ -97,6 +172,7 @@ function TaskItem({
           </select>
 
           <button
+            ref={editButtonRef}
             className="task-action-btn"
             onClick={() => setIsEditing(true)}
             aria-label="Edit task"
