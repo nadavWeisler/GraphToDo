@@ -316,6 +316,38 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
   ).toBeTruthy()
 })
 
+test('drag-over applies visual feedback class on quadrant', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Highlight test{enter}')
+
+  const taskItem = within(q1).getByText('Highlight test').closest('li')
+  const q2 = getQuadrantByLabel('Schedule')
+
+  const dragData = new Map()
+  const dataTransfer = {
+    dropEffect: 'none',
+    effectAllowed: 'all',
+    types: [],
+    setData(type, value) {
+      dragData.set(type, value)
+      this.types = [...dragData.keys()]
+    },
+    getData(type) {
+      return dragData.get(type) ?? ''
+    },
+  }
+
+  fireEvent.dragStart(taskItem, { dataTransfer })
+  fireEvent.dragOver(q2, { dataTransfer })
+  expect(q2.classList.contains('drag-over')).toBe(true)
+
+  fireEvent.dragLeave(q2, { dataTransfer, relatedTarget: document.body })
+  expect(q2.classList.contains('drag-over')).toBe(false)
+})
+
 test('can set and display a due date on a task', async () => {
   const user = userEvent.setup()
   render(<App />)
