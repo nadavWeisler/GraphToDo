@@ -9,6 +9,17 @@ function emptyTasks() {
   return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
 }
 
+function compactTasks(tasks) {
+  const compacted = {}
+  for (const { id } of QUADRANTS) {
+    const quadrantTasks = tasks[id]
+    if (Array.isArray(quadrantTasks) && quadrantTasks.length) {
+      compacted[id] = quadrantTasks
+    }
+  }
+  return compacted
+}
+
 function normalizeText(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
@@ -44,7 +55,7 @@ function isDuplicate(tasks, quadrantId, text, excludedTaskId = null) {
 }
 
 function validateTasksShape(data) {
-  if (!data || typeof data !== 'object') return null
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null
   const next = emptyTasks()
 
   for (const { id, legacyId } of QUADRANTS) {
@@ -56,7 +67,11 @@ function validateTasksShape(data) {
       quadrantTasks = data[legacyId]
     }
 
-    if (!Array.isArray(quadrantTasks)) return null
+    if (quadrantTasks === null) {
+      if (id in data && !Array.isArray(data[id])) return null
+      if (legacyId in data && !Array.isArray(data[legacyId])) return null
+      continue
+    }
 
     const sanitized = quadrantTasks
       .filter(isValidTask)
@@ -158,7 +173,13 @@ function App() {
   const importInputRef = useRef(null)
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks }))
+    const compacted = compactTasks(tasks)
+    if (Object.keys(compacted).length === 0) {
+      localStorage.removeItem(STORAGE_KEY)
+      return
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: compacted }))
   }, [tasks])
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
