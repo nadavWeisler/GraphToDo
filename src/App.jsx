@@ -85,35 +85,39 @@ function validateImportedTasksShape(data) {
 
   const next = emptyTasks()
 
-  for (const { id } of QUADRANTS) {
-    if (!(id in data)) {
+  for (const { id, legacyId } of QUADRANTS) {
+    let keyUsed = id
+    let quadrantData = data[id]
+
+    if (!Array.isArray(quadrantData) && Array.isArray(data[legacyId])) {
+      keyUsed = legacyId
+      quadrantData = data[legacyId]
+    }
+
+    if (!Array.isArray(quadrantData)) {
       throw new Error(`Missing required quadrant "${id}".`)
     }
 
-    if (!Array.isArray(data[id])) {
-      throw new Error(`Quadrant "${id}" must be an array of tasks.`)
-    }
-
     const sanitized = []
-    for (const [index, task] of data[id].entries()) {
+    for (const [index, task] of quadrantData.entries()) {
       if (!task || typeof task !== 'object' || Array.isArray(task)) {
-        throw new Error(`Task ${index + 1} in "${id}" must be an object.`)
+        throw new Error(`Task ${index + 1} in "${keyUsed}" must be an object.`)
       }
 
       if (typeof task.id !== 'string' || !task.id.trim()) {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "id" string.`)
+        throw new Error(`Task ${index + 1} in "${keyUsed}" is missing a valid "id" string.`)
       }
 
       if (typeof task.text !== 'string') {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "text" string.`)
+        throw new Error(`Task ${index + 1} in "${keyUsed}" is missing a valid "text" string.`)
       }
 
       if (!normalizeText(task.text)) {
-        throw new Error(`Task ${index + 1} in "${id}" must have non-empty "text".`)
+        throw new Error(`Task ${index + 1} in "${keyUsed}" must have non-empty "text".`)
       }
 
       if (typeof task.done !== 'boolean') {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "done" boolean.`)
+        throw new Error(`Task ${index + 1} in "${keyUsed}" is missing a valid "done" boolean.`)
       }
 
       const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
