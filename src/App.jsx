@@ -25,7 +25,7 @@ function normalizeText(value) {
 }
 
 function createTask(text) {
-  return { id: crypto.randomUUID(), text, done: false }
+  return { id: crypto.randomUUID(), text, done: false, dueDate: null }
 }
 
 function isValidTask(task) {
@@ -33,7 +33,8 @@ function isValidTask(task) {
     task &&
     typeof task.id === 'string' &&
     typeof task.text === 'string' &&
-    typeof task.done === 'boolean'
+    typeof task.done === 'boolean' &&
+    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string')
   )
 }
 
@@ -44,7 +45,13 @@ function sanitizeTask(task) {
     id: task.id,
     text,
     done: task.done,
+    dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
   }
+}
+
+function dueDateSortKey(dueDate) {
+  if (!dueDate) return Infinity
+  return new Date(dueDate + 'T00:00:00').getTime()
 }
 
 function isDuplicate(tasks, quadrantId, text, excludedTaskId = null) {
@@ -100,35 +107,36 @@ function validateImportedTasksShape(data) {
 
   const next = emptyTasks()
 
-  for (const { id } of QUADRANTS) {
-    if (!(id in data)) {
+  for (const { id, legacyId } of QUADRANTS) {
+    const dataKey = id in data ? id : legacyId in data ? legacyId : null
+    if (!dataKey) {
       throw new Error(`Missing required quadrant "${id}".`)
     }
 
-    if (!Array.isArray(data[id])) {
-      throw new Error(`Quadrant "${id}" must be an array of tasks.`)
+    if (!Array.isArray(data[dataKey])) {
+      throw new Error(`Quadrant "${dataKey}" must be an array of tasks.`)
     }
 
     const sanitized = []
-    for (const [index, task] of data[id].entries()) {
+    for (const [index, task] of data[dataKey].entries()) {
       if (!task || typeof task !== 'object' || Array.isArray(task)) {
-        throw new Error(`Task ${index + 1} in "${id}" must be an object.`)
+        throw new Error(`Task ${index + 1} in "${dataKey}" must be an object.`)
       }
 
       if (typeof task.id !== 'string' || !task.id.trim()) {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "id" string.`)
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "id" string.`)
       }
 
       if (typeof task.text !== 'string') {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "text" string.`)
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "text" string.`)
       }
 
       if (!normalizeText(task.text)) {
-        throw new Error(`Task ${index + 1} in "${id}" must have non-empty "text".`)
+        throw new Error(`Task ${index + 1} in "${dataKey}" must have non-empty "text".`)
       }
 
       if (typeof task.done !== 'boolean') {
-        throw new Error(`Task ${index + 1} in "${id}" is missing a valid "done" boolean.`)
+        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "done" boolean.`)
       }
 
       const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
@@ -136,6 +144,7 @@ function validateImportedTasksShape(data) {
         text,
         done: task.done,
         id: task.id.trim(),
+        dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
       })
     }
 
@@ -169,6 +178,7 @@ function App() {
   const [tasks, setTasks] = useState(loadTasks)
   const [searchQuery, setSearchQuery] = useState('')
   const [hideCompleted, setHideCompleted] = useState(false)
+  const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
@@ -187,14 +197,20 @@ function App() {
   const visibleTasks = useMemo(() => {
     const next = emptyTasks()
     for (const { id } of QUADRANTS) {
-      next[id] = tasks[id].filter((task) => {
+      let filtered = tasks[id].filter((task) => {
         if (hideCompleted && task.done) return false
         if (!normalizedSearch) return true
         return task.text.toLowerCase().includes(normalizedSearch)
       })
+      if (sortByDueDate) {
+        filtered = [...filtered].sort(
+          (a, b) => dueDateSortKey(a.dueDate) - dueDateSortKey(b.dueDate)
+        )
+      }
+      next[id] = filtered
     }
     return next
-  }, [hideCompleted, normalizedSearch, tasks])
+  }, [hideCompleted, normalizedSearch, sortByDueDate, tasks])
 
   function handleAddTask(quadrantId, text) {
     const cleanText = normalizeText(text)
@@ -235,7 +251,7 @@ function App() {
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText) {
+  function handleEditTask(quadrantId, taskId, nextText, nextDueDate = null) {
     const cleanText = normalizeText(nextText)
 
     if (!cleanText) {
@@ -253,7 +269,7 @@ function App() {
     setTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
-        task.id === taskId ? { ...task, text: cleanText } : task
+        task.id === taskId ? { ...task, text: cleanText, dueDate: nextDueDate } : task
       ),
     }))
 
@@ -372,6 +388,16 @@ function App() {
             onChange={(event) => setHideCompleted(event.target.checked)}
           />
           <span>Hide completed</span>
+        </label>
+
+        <label className="toolbar-checkbox" htmlFor="sort-due-date">
+          <input
+            id="sort-due-date"
+            type="checkbox"
+            checked={sortByDueDate}
+            onChange={(event) => setSortByDueDate(event.target.checked)}
+          />
+          <span>Sort by due date</span>
         </label>
 
         <div className="toolbar-actions">
