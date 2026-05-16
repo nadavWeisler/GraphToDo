@@ -99,6 +99,15 @@ function TaskItem({
             Cancel
           </button>
         </form>
+      ) : task.done ? (
+        <button
+          type="button"
+          className="task-text task-text-btn"
+          onClick={onToggle}
+          aria-label={`Reopen task: ${task.text}`}
+        >
+          {task.text}
+        </button>
       ) : (
         <span className="task-text">{task.text}</span>
       )}
