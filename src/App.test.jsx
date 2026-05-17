@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { vi } from 'vitest'
 import App from './App'
 import { QUADRANTS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 
@@ -273,15 +274,20 @@ test('returns focus to the edit button when editing is cancelled', async () => {
 })
 
 test('imports valid JSON tasks and shows success message', async () => {
-  const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
+  const [firstQuadrant] = QUADRANTS
   const { container } = render(<App />)
 
   const fileInput = container.querySelector('input[type="file"]')
-  const importTasks = Object.fromEntries(QUADRANTS.map(({ id }) => [id, []]))
-  importTasks[firstQuadrant.id] = [{ id: 'a', text: 'Plan sprint', done: false }]
   const file = new File(
-    [JSON.stringify({ tasks: importTasks })],
+    [
+      JSON.stringify({
+        tasks: {
+          [firstQuadrant.id]: [{ id: 'a', text: 'Plan sprint', done: false }],
+          ...Object.fromEntries(QUADRANTS.slice(1).map((quadrant) => [quadrant.id, []])),
+        },
+      }),
+    ],
     'tasks.json',
     { type: 'application/json' }
   )
@@ -294,15 +300,20 @@ test('imports valid JSON tasks and shows success message', async () => {
 })
 
 test('shows actionable error when imported JSON schema is invalid', async () => {
-  const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
+  const [firstQuadrant] = QUADRANTS
   const { container } = render(<App />)
 
   const fileInput = container.querySelector('input[type="file"]')
-  const importTasks = Object.fromEntries(QUADRANTS.map(({ id }) => [id, []]))
-  importTasks[firstQuadrant.id] = [{ id: 'a', done: false }]
   const file = new File(
-    [JSON.stringify({ tasks: importTasks })],
+    [
+      JSON.stringify({
+        tasks: {
+          [firstQuadrant.id]: [{ id: 'a', done: false }],
+          ...Object.fromEntries(QUADRANTS.slice(1).map((quadrant) => [quadrant.id, []])),
+        },
+      }),
+    ],
     'invalid-tasks.json',
     { type: 'application/json' }
   )
@@ -314,6 +325,39 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
       `Import failed: Task 1 in "${firstQuadrant.id}" is missing a valid "text" string.`
     )
   ).toBeTruthy()
+})
+
+test('falls back to in-memory tasks when localStorage is unavailable', async () => {
+  const user = userEvent.setup()
+  const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+  const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+  const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    throw new Error('storage unavailable')
+  })
+
+  try {
+    render(<App />)
+
+    expect(
+      screen.getByText(
+        'Local storage is unavailable. Tasks are only kept in memory and may be lost on refresh.'
+      )
+    ).toBeTruthy()
+
+    const q1 = getQuadrantByLabel('Do First')
+    const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+    await user.type(addInput, 'Stay focused{enter}')
+
+    expect(within(q1).getByText('Stay focused')).toBeTruthy()
+  } finally {
+    getItemSpy.mockRestore()
+    setItemSpy.mockRestore()
+    removeItemSpy.mockRestore()
+  }
 })
 
 test('drag-over applies visual feedback class on quadrant', async () => {

@@ -17,6 +17,7 @@ GraphToDo is an Eisenhower Matrix task app built with React + Vite. It helps you
   - blocks duplicates per quadrant (case/whitespace insensitive)
   - max task length (120 chars)
 - Persistence in `localStorage`.
+- Resilient persistence fallback: if `localStorage` is unavailable, tasks keep working in-memory with a warning that refresh may lose data.
 - Quick search across tasks.
 - Optional "Hide completed" filter.
 - Per-quadrant count display (total + shown).

@@ -87,6 +87,17 @@
   color: #475569;
 }
 
+.storage-warning {
+  max-width: 900px;
+  margin: 0 auto 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #f5c2c7;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #9f1239;
+  font-size: 0.8rem;
+}
+
 /* Axis labels row */
 .matrix-labels {
   display: flex;
