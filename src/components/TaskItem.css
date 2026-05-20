@@ -133,6 +133,11 @@
   font-size: 0.85rem;
 }
 
+.task-edit-input[aria-invalid="true"] {
+  border-color: #ef4444;
+  background: #fff5f5;
+}
+
 .task-date-input {
   border: 1px solid rgba(0, 0, 0, 0.25);
   border-radius: 6px;

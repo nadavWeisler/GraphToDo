@@ -66,6 +66,12 @@ function TaskItem({
     setErrorMessage('')
   }
 
+  function handleEditBlur() {
+    if (!draftText.trim()) {
+      setErrorMessage('Task cannot be empty.')
+    }
+  }
+
   function handleMove(event) {
     const target = event.target.value
     const result = onMove(target)
@@ -119,7 +125,13 @@ function TaskItem({
               className="task-edit-input"
               type="text"
               value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
+              onChange={(event) => {
+                setDraftText(event.target.value)
+                if (errorMessage) setErrorMessage('')
+              }}
+              onBlur={handleEditBlur}
+              aria-invalid={errorMessage ? 'true' : undefined}
+              {...(errorMessage ? { 'aria-describedby': `item-error-${task.id}` } : {})}
               maxLength={120}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
@@ -209,7 +221,7 @@ function TaskItem({
         ×
       </button>
 
-      <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
+      <p className="item-error" id={`item-error-${task.id}`} role="status" aria-live="polite">{errorMessage}</p>
     </li>
   )
 }

@@ -113,6 +113,16 @@
   background: #fff;
 }
 
+.add-task-form input[type="text"][aria-invalid="true"] {
+  border-color: #ef4444;
+  background: #fff5f5;
+}
+
+.add-task-form input[type="text"][aria-invalid="true"]:focus {
+  border-color: #dc2626;
+  background: #fff5f5;
+}
+
 .add-task-form input[type="date"],
 .add-task-form input[type="time"] {
   padding: 0.3rem 0.45rem;

@@ -24,6 +24,7 @@ function Quadrant({
   const [addDueTime, setAddDueTime] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const addInputRef = useRef(null)
+  const inputDirtyRef = useRef(false)
   const [isDragOver, setIsDragOver] = useState(false)
 
   function handleAdd(event) {
@@ -39,7 +40,15 @@ function Quadrant({
     setAddDueDate('')
     setAddDueTime('')
     setErrorMessage('')
+    inputDirtyRef.current = false
     addInputRef.current?.focus()
+  }
+
+  function handleInputBlur() {
+    if (!inputDirtyRef.current) return
+    if (!input.trim()) {
+      setErrorMessage('Task cannot be empty.')
+    }
   }
 
   function handleTaskDragStart(event, sourceQuadrantId, taskId) {
@@ -132,8 +141,14 @@ function Quadrant({
             id={`add-${id}`}
             type="text"
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              setInput(event.target.value)
+              inputDirtyRef.current = true
+              if (errorMessage) setErrorMessage('')
+            }}
+            onBlur={handleInputBlur}
             placeholder="Add a task…"
+            aria-invalid={errorMessage ? 'true' : undefined}
             {...(errorMessage ? { 'aria-describedby': `error-${id}` } : {})}
             maxLength={120}
           />

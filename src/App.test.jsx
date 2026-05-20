@@ -532,3 +532,71 @@ test('edit task can set and update due date', async () => {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
   expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
 })
+
+test('shows validation error on blur when add task input is empty after being edited', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+
+  await user.type(addInput, 'Draft')
+  await user.clear(addInput)
+  await user.tab()
+
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+  expect(addInput.getAttribute('aria-invalid')).toBe('true')
+})
+
+test('clears add task validation error when user starts typing', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+
+  await user.type(addInput, 'Draft')
+  await user.clear(addInput)
+  await user.tab()
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+
+  await user.type(addInput, 'New task')
+  expect(within(q1).queryByText('Task cannot be empty.')).toBeNull()
+  expect(addInput.hasAttribute('aria-invalid')).toBe(false)
+})
+
+test('shows validation error on blur when edit task input is empty', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'My task{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  await user.clear(editInput)
+  await user.tab()
+
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+  expect(editInput.getAttribute('aria-invalid')).toBe('true')
+})
+
+test('clears edit task validation error when user starts typing', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'My task{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  await user.clear(editInput)
+  await user.tab()
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+
+  await user.type(editInput, 'Fixed task')
+  expect(within(q1).queryByText('Task cannot be empty.')).toBeNull()
+  expect(editInput.hasAttribute('aria-invalid')).toBe(false)
+})
