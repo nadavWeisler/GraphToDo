@@ -321,8 +321,53 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
   await user.upload(fileInput, file)
 
   expect(
+    screen.getByText('Import failed with 1 validation error(s).')
+  ).toBeTruthy()
+  expect(
     screen.getByText(
-      `Import failed: Task 1 in "${firstQuadrant.id}" is missing a valid "text" string.`
+      `Item at index 0 in "${firstQuadrant.id}" failed because Task is missing a valid "text" string.`
+    )
+  ).toBeTruthy()
+})
+
+test('imports valid tasks while showing index-mapped errors for invalid items', async () => {
+  const user = userEvent.setup()
+  const [firstQuadrant] = QUADRANTS
+  const { container } = render(<App />)
+
+  const fileInput = container.querySelector('input[type="file"]')
+  const file = new File(
+    [
+      JSON.stringify({
+        tasks: {
+          [firstQuadrant.id]: [
+            { id: 'a', text: 'Plan sprint', done: false },
+            { id: 'b', text: 'Bad done type', done: 'nope' },
+            { id: 'c', text: 'Plan sprint', done: true },
+            { id: 'd', text: 'Write docs', done: false },
+          ],
+          ...Object.fromEntries(QUADRANTS.slice(1).map((quadrant) => [quadrant.id, []])),
+        },
+      }),
+    ],
+    'mixed-tasks.json',
+    { type: 'application/json' }
+  )
+
+  await user.upload(fileInput, file)
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Plan sprint')).toBeTruthy()
+  expect(within(q1).getByText('Write docs')).toBeTruthy()
+  expect(screen.getByText('Tasks imported with 2 validation error(s).')).toBeTruthy()
+  expect(
+    screen.getByText(
+      `Item at index 1 in "${firstQuadrant.id}" failed because Task is missing a valid "done" boolean.`
+    )
+  ).toBeTruthy()
+  expect(
+    screen.getByText(
+      `Item at index 2 in "${firstQuadrant.id}" failed because Task text duplicates another task in the same quadrant.`
     )
   ).toBeTruthy()
 })

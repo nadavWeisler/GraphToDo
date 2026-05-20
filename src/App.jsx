@@ -114,42 +114,130 @@ function canUseLocalStorage() {
 }
 
 function validateImportedTasksShape(data) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    throw new Error('Expected an object with q1, q2, q3, and q4 arrays.')
-  }
-
   const next = emptyTasks()
+  const validationErrors = []
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      isValid: false,
+      processedData: next,
+      validationErrors: [
+        {
+          path: 'tasks',
+          index: null,
+          quadrantId: null,
+          message: 'Expected an object with q1, q2, q3, and q4 arrays.',
+        },
+      ],
+    }
+  }
 
   for (const { id, legacyId } of QUADRANTS) {
     const dataKey = id in data ? id : legacyId in data ? legacyId : null
     if (!dataKey) {
-      throw new Error(`Missing required quadrant "${id}".`)
+      validationErrors.push({
+        path: `tasks.${id}`,
+        index: null,
+        quadrantId: id,
+        message: `Missing required quadrant "${id}".`,
+      })
+      continue
     }
 
     if (!Array.isArray(data[dataKey])) {
-      throw new Error(`Quadrant "${dataKey}" must be an array of tasks.`)
+      validationErrors.push({
+        path: `tasks.${dataKey}`,
+        index: null,
+        quadrantId: id,
+        message: `Quadrant "${dataKey}" must be an array of tasks.`,
+      })
+      continue
     }
 
     const sanitized = []
     for (const [index, task] of data[dataKey].entries()) {
+      const taskPath = `tasks.${dataKey}[${index}]`
+
       if (!task || typeof task !== 'object' || Array.isArray(task)) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" must be an object.`)
+        validationErrors.push({
+          path: taskPath,
+          index,
+          quadrantId: id,
+          message: 'Task must be an object.',
+        })
+        continue
       }
 
+      let hasError = false
+
       if (typeof task.id !== 'string' || !task.id.trim()) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "id" string.`)
+        validationErrors.push({
+          path: `${taskPath}.id`,
+          index,
+          quadrantId: id,
+          message: 'Task is missing a valid "id" string.',
+        })
+        hasError = true
       }
 
       if (typeof task.text !== 'string') {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "text" string.`)
-      }
-
-      if (!normalizeText(task.text)) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" must have non-empty "text".`)
+        validationErrors.push({
+          path: `${taskPath}.text`,
+          index,
+          quadrantId: id,
+          message: 'Task is missing a valid "text" string.',
+        })
+        hasError = true
+      } else if (!normalizeText(task.text)) {
+        validationErrors.push({
+          path: `${taskPath}.text`,
+          index,
+          quadrantId: id,
+          message: 'Task must have non-empty "text".',
+        })
+        hasError = true
       }
 
       if (typeof task.done !== 'boolean') {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "done" boolean.`)
+        validationErrors.push({
+          path: `${taskPath}.done`,
+          index,
+          quadrantId: id,
+          message: 'Task is missing a valid "done" boolean.',
+        })
+        hasError = true
+      }
+
+      if (
+        task.dueDate !== undefined &&
+        task.dueDate !== null &&
+        typeof task.dueDate !== 'string'
+      ) {
+        validationErrors.push({
+          path: `${taskPath}.dueDate`,
+          index,
+          quadrantId: id,
+          message: 'Task "dueDate" must be a string or null when provided.',
+        })
+        hasError = true
+      }
+
+      if (
+        task.dueTime !== undefined &&
+        task.dueTime !== null &&
+        typeof task.dueTime !== 'string'
+      ) {
+        validationErrors.push({
+          path: `${taskPath}.dueTime`,
+          index,
+          quadrantId: id,
+          message: 'Task "dueTime" must be a string or null when provided.',
+        })
+        hasError = true
+      }
+
+      if (hasError) {
+        continue
       }
 
       const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
@@ -159,6 +247,7 @@ function validateImportedTasksShape(data) {
         id: task.id.trim(),
         dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
         dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+        sourceIndex: index,
       })
     }
 
@@ -166,15 +255,41 @@ function validateImportedTasksShape(data) {
     const seen = new Set()
     for (const task of sanitized) {
       const key = normalizeText(task.text).toLowerCase()
-      if (seen.has(key)) continue
+      if (seen.has(key)) {
+        validationErrors.push({
+          path: `tasks.${dataKey}[${task.sourceIndex}].text`,
+          index: task.sourceIndex,
+          quadrantId: id,
+          message: 'Task text duplicates another task in the same quadrant.',
+        })
+        continue
+      }
       seen.add(key)
-      deduped.push(task)
+      deduped.push({
+        text: task.text,
+        done: task.done,
+        id: task.id,
+        dueDate: task.dueDate,
+        dueTime: task.dueTime,
+      })
     }
 
     next[id] = deduped
   }
 
-  return next
+  return {
+    isValid: validationErrors.length === 0,
+    processedData: next,
+    validationErrors,
+  }
+}
+
+function formatImportValidationError(error) {
+  if (typeof error.index === 'number' && error.quadrantId) {
+    return `Item at index ${error.index} in "${error.quadrantId}" failed because ${error.message}`
+  }
+
+  return `Validation error at "${error.path}": ${error.message}`
 }
 
 function defaultConfig() {
@@ -220,6 +335,7 @@ function App() {
   const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [importValidationErrors, setImportValidationErrors] = useState([])
   const importInputRef = useRef(null)
 
   function persistState(nextTasks, nextHideCompleted = hideCompleted) {
@@ -391,11 +507,33 @@ function App() {
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
-      const imported = validateImportedTasksShape(parsed.tasks ?? parsed)
+      const { isValid, processedData, validationErrors } = validateImportedTasksShape(
+        parsed.tasks ?? parsed
+      )
 
-      updateTasks(imported)
-      setStatusMessage('Tasks imported successfully.')
+      updateTasks(processedData)
+
+      if (isValid) {
+        setImportValidationErrors([])
+        setStatusMessage('Tasks imported successfully.')
+        return
+      }
+
+      setImportValidationErrors(validationErrors)
+      const importedCount = QUADRANTS.reduce(
+        (total, quadrant) => total + processedData[quadrant.id].length,
+        0
+      )
+      if (importedCount > 0) {
+        setStatusMessage(
+          `Tasks imported with ${validationErrors.length} validation error(s).`
+        )
+        return
+      }
+
+      setStatusMessage(`Import failed with ${validationErrors.length} validation error(s).`)
     } catch (error) {
+      setImportValidationErrors([])
       if (error instanceof SyntaxError) {
         setStatusMessage('Import failed: invalid JSON syntax. Please upload a valid .json file.')
         return
@@ -496,6 +634,13 @@ function App() {
       <p className="status-message" role="status" aria-live="polite">
         {statusMessage}
       </p>
+      {importValidationErrors.length > 0 && (
+        <ul className="status-error-list" aria-label="Import validation errors">
+          {importValidationErrors.map((error, index) => (
+            <li key={`${error.path}-${index}`}>{formatImportValidationError(error)}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="matrix-labels" aria-hidden="true">
         <span className="axis-label urgent-label">← Urgent</span>
