@@ -407,9 +407,38 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
 
   expect(
     screen.getByText(
-      `Import failed: Task 1 in "${firstQuadrant.id}" is missing a valid "text" string.`
+      `Import failed: Invalid JSON structure found. Task 1 in "${firstQuadrant.id}" missing a valid "text" string.`
     )
   ).toBeTruthy()
+})
+
+test('aggregates all schema validation errors during import', async () => {
+  const user = userEvent.setup()
+  const [firstQuadrant, secondQuadrant] = QUADRANTS
+  const { container } = render(<App />)
+
+  const fileInput = container.querySelector('input[type="file"]')
+  const file = new File(
+    [
+      JSON.stringify({
+        tasks: {
+          [firstQuadrant.id]: [{ id: 'a', text: 'Plan sprint', done: 'nope' }],
+          [secondQuadrant.id]: [{ text: 'Schedule retro', done: false }],
+        },
+      }),
+    ],
+    'invalid-tasks.json',
+    { type: 'application/json' }
+  )
+
+  await user.upload(fileInput, file)
+
+  const status = container.querySelector('.status-message')?.textContent ?? ''
+  expect(status).toContain('Import failed: Invalid JSON structure found.')
+  expect(status).toContain(`Task 1 in "${firstQuadrant.id}" missing a valid "done" boolean.`)
+  expect(status).toContain(`Task 1 in "${secondQuadrant.id}" missing a valid "id" string.`)
+  expect(status).toContain(`Missing required quadrant "${QUADRANTS[2].id}".`)
+  expect(status).toContain(`Missing required quadrant "${QUADRANTS[3].id}".`)
 })
 
 test('falls back to in-memory tasks when localStorage is unavailable', async () => {
