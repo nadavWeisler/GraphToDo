@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Quadrant from './components/Quadrant'
+import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 import type { Task, TasksState, AppConfig, TaskActionResult } from './types'
 
@@ -357,7 +359,66 @@ function App() {
   const [importValidationErrors, setImportValidationErrors] = useState([])
   const importInputRef = useRef(null)
 
-  function persistState(nextTasks: TasksState, nextHideCompleted: boolean = hideCompleted): void {
+  // Refs that always hold the latest state values for event handlers registered once on mount.
+  // Updated in an effect after every render to avoid stale closures without re-registering
+  // the listeners.
+  const tasksRef = useRef(tasks)
+  const hideCompletedRef = useRef(hideCompleted)
+  const storageAvailableRef = useRef(storageAvailable)
+
+  useEffect(() => {
+    tasksRef.current = tasks
+    hideCompletedRef.current = hideCompleted
+    storageAvailableRef.current = storageAvailable
+  })
+
+  // Register lifecycle listeners once on mount:
+  //  • beforeunload – flush the latest in-memory state to localStorage before the page
+  //    unloads (hard refresh, tab close), closing the window where pending React renders
+  //    could leave localStorage behind the in-memory state.
+  //  • storage     – re-read and sync in-memory state when another tab writes to the
+  //    same key, handling concurrent read/write conflicts across sessions.
+  useEffect(() => {
+    function handleBeforeUnload() {
+      if (!storageAvailableRef.current) return
+      try {
+        const compacted = compactTasks(tasksRef.current)
+        if (Object.keys(compacted).length === 0) {
+          localStorage.removeItem(STORAGE_KEY)
+          return
+        }
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            tasks: compacted,
+            config: { hideCompleted: hideCompletedRef.current },
+            lastUpdated: Date.now(),
+          })
+        )
+      } catch {
+        // Best-effort: cannot handle storage errors during page unload
+      }
+    }
+
+    function handleStorageChange(event) {
+      if (event.storageArea !== localStorage) return
+      if (event.key !== STORAGE_KEY && event.key !== LEGACY_STORAGE_KEY) return
+      // Another tab modified localStorage; re-read and sync in-memory state
+      const reloaded = loadState()
+      setTasks(reloaded.tasks)
+      setHideCompleted(reloaded.config.hideCompleted)
+      if (!reloaded.storageAvailable) setStorageAvailable(false)
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('storage', handleStorageChange)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('storage', handleStorageChange)
+    }
+  }, [])
+
+  function persistState(nextTasks, nextHideCompleted = hideCompleted) {
     if (!storageAvailable) return
     try {
       const compacted = compactTasks(nextTasks)
@@ -367,7 +428,7 @@ function App() {
       }
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks: compacted, config: { hideCompleted: nextHideCompleted } })
+        JSON.stringify({ tasks: compacted, config: { hideCompleted: nextHideCompleted }, lastUpdated: Date.now() })
       )
     } catch {
       setStorageAvailable(false)
