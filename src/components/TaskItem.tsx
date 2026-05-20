@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import TaskEditModal from './TaskEditModal'
 import './TaskItem.css'
 import type { Task, QuadrantDef, TaskResult, EditTaskPayload } from '../types'
 
@@ -49,43 +50,29 @@ function TaskItem({
   onMove,
   onDragStart,
   onDragEnd,
-}: TaskItemProps) {
-  const [isEditing, setIsEditing] = useState<boolean>(false)
-  const [draftText, setDraftText] = useState<string>(task.text)
-  const [draftDueDate, setDraftDueDate] = useState<string>(task.dueDate ?? '')
-  const [draftDueTime, setDraftDueTime] = useState<string>(task.dueTime ?? '')
-  const [errorMessage, setErrorMessage] = useState<string>('')
-  const editInputRef = useRef<HTMLInputElement>(null)
-  const editButtonRef = useRef<HTMLButtonElement>(null)
-  const shouldRestoreFocusRef = useRef<boolean>(false)
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const editButtonRef = useRef(null)
+  const shouldRestoreFocusRef = useRef(false)
 
   useEffect(() => {
-    if (isEditing) {
-      editInputRef.current?.focus()
-      return
-    }
-
-    if (shouldRestoreFocusRef.current) {
+    if (!isEditing && shouldRestoreFocusRef.current) {
       editButtonRef.current?.focus()
       shouldRestoreFocusRef.current = false
     }
   }, [isEditing])
 
-  function handleSave(event: React.FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    const tags = draftTags
-      .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean)
-    const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null, tags })
+  function handleSave(payload) {
+    const result = onSave(payload)
     if (!result.ok) {
-      setErrorMessage(result.error ?? '')
-      return
+      return result
     }
 
     shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
+    return result
   }
 
   function handleMove(event: React.ChangeEvent<HTMLSelectElement>): void {
@@ -99,14 +86,9 @@ function TaskItem({
     setErrorMessage('')
   }
 
-  function handleCancel(): void {
-    setDraftText(task.text)
-    setDraftDueDate(task.dueDate ?? '')
-    setDraftDueTime(task.dueTime ?? '')
-    setDraftTags((task.tags ?? []).join(', '))
+  function handleCancel() {
     shouldRestoreFocusRef.current = true
     setIsEditing(false)
-    setErrorMessage('')
   }
 
   function handleKeyboardMove(event) {
@@ -170,64 +152,7 @@ function TaskItem({
         <span className="checkmark" aria-hidden="true">{task.done ? '✓' : ''}</span>
       </button>
 
-      {isEditing ? (
-        <form className="edit-task-form" onSubmit={handleSave}>
-          <div className="edit-row">
-            <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
-            <input
-              ref={editInputRef}
-              id={`edit-${task.id}`}
-              className="task-edit-input"
-              type="text"
-              value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
-              maxLength={120}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  handleCancel()
-                }
-              }}
-            />
-            <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
-            <button type="button" className="task-action-btn" onClick={handleCancel}>
-              Cancel
-            </button>
-          </div>
-          <div className="edit-row">
-            <label className="sr-only" htmlFor={`edit-due-date-${task.id}`}>Due date</label>
-            <input
-              id={`edit-due-date-${task.id}`}
-              className="task-date-input"
-              type="date"
-              value={draftDueDate}
-              onChange={(event) => setDraftDueDate(event.target.value)}
-              aria-label="Due date"
-            />
-            <label className="sr-only" htmlFor={`edit-due-time-${task.id}`}>Due time</label>
-            <input
-              id={`edit-due-time-${task.id}`}
-              className="task-date-input"
-              type="time"
-              value={draftDueTime}
-              onChange={(event) => setDraftDueTime(event.target.value)}
-              aria-label="Due time"
-              disabled={!draftDueDate}
-            />
-          </div>
-          <div className="edit-row">
-            <label className="sr-only" htmlFor={`edit-tags-${task.id}`}>Tags (comma-separated)</label>
-            <input
-              id={`edit-tags-${task.id}`}
-              className="task-tags-input"
-              type="text"
-              value={draftTags}
-              onChange={(event) => setDraftTags(event.target.value)}
-              placeholder="tag1, tag2…"
-              aria-label="Tags (comma-separated)"
-            />
-          </div>
-        </form>
-      ) : task.done ? (
+      {task.done ? (
         <button
           type="button"
           className="task-text task-text-btn"
@@ -289,7 +214,16 @@ function TaskItem({
         ×
       </button>
 
-      <p className="item-error" id={errorId} role="status" aria-live="polite">{errorMessage}</p>
+      <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
+
+      {isEditing ? (
+        <TaskEditModal
+          key={`${task.id}:${task.text}:${task.dueDate ?? ''}:${task.dueTime ?? ''}`}
+          task={task}
+          onSave={handleSave}
+          onCancel={handleCancel}
+        />
+      ) : null}
     </li>
   )
 }

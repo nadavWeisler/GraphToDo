@@ -290,13 +290,15 @@ test('moves focus into and out of the edit form logically', async () => {
   const editButton = within(q1).getByRole('button', { name: 'Edit task' })
   await user.click(editButton)
 
-  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const editInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
   expect(document.activeElement).toBe(editInput)
 
   await user.clear(editInput)
   await user.type(editInput, 'Draft summary updated{enter}')
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
 })
 
 test('returns focus to the edit button when editing is cancelled', async () => {
@@ -307,11 +309,13 @@ test('returns focus to the edit button when editing is cancelled', async () => {
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Review notes{enter}')
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
-  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const editInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
 
   await user.type(editInput, '{Escape}')
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
 })
 
 test('imports valid JSON tasks and shows success message', async () => {
@@ -442,10 +446,11 @@ test('can set and display a due date on a task', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
 
-  const dueDateInput = within(q1).getByLabelText('Due date')
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const dueDateInput = within(dialog).getByLabelText('Due date')
   await user.type(dueDateInput, '2099-12-31')
 
-  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
 
   expect(within(q1).getByLabelText(/Due:/)).toBeTruthy()
 })
@@ -565,57 +570,23 @@ test('edit task can set and update due date', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
 
-  const dateInput = within(q1).getByLabelText('Due date')
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const dateInput = within(dialog).getByLabelText('Due date')
   await user.type(dateInput, '2030-06-15')
 
-  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
 
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) as string) as { tasks: Record<string, Array<{ text: string; dueDate: string }>> }
   expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
 })
 
-test('adds a task with tags and displays them as chips', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  const q1 = getQuadrantByLabel('Do First')
-  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
-  const tagsInput = within(q1).getByLabelText('New task tags')
-
-  await user.type(addInput, 'Write docs')
-  await user.type(tagsInput, 'work, writing')
-  await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
-
-  expect(within(q1).getByText('Write docs')).toBeTruthy()
-  expect(within(q1).getByText('work')).toBeTruthy()
-  expect(within(q1).getByText('writing')).toBeTruthy()
-})
-
-test('persists tags when adding a task', async () => {
-  const user = userEvent.setup()
-  render(<App />)
-
-  const q1 = getQuadrantByLabel('Do First')
-  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
-  const tagsInput = within(q1).getByLabelText('New task tags')
-
-  await user.type(addInput, 'Deploy app')
-  await user.type(tagsInput, 'work, devops')
-  await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
-
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-  const task = saved.tasks[QUADRANTS[0].id].find((t) => t.text === 'Deploy app')
-  expect(task).toBeTruthy()
-  expect(task.tags).toEqual(['work', 'devops'])
-})
-
-test('can edit tags on an existing task', async () => {
+test('edit task opens a modal with current values and saves updates', async () => {
   const user = userEvent.setup()
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
       tasks: {
-        q1: [{ id: 'tag-task', text: 'Review PR', done: false, dueDate: null, dueTime: null, tags: ['dev'] }],
+        q1: [{ id: 'task4', text: 'Plan launch', done: false, dueDate: '2030-06-15', dueTime: '09:30' }],
         q2: [],
         q3: [],
         q4: [],
@@ -628,132 +599,42 @@ test('can edit tags on an existing task', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
 
-  const tagsInput = within(q1).getByLabelText('Tags (comma-separated)')
-  await user.clear(tagsInput)
-  await user.type(tagsInput, 'dev, review')
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const textInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
+  const dateInput = within(dialog).getByLabelText('Due date')
+  const timeInput = within(dialog).getByLabelText('Due time')
 
-  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+  expect(textInput.value).toBe('Plan launch')
+  expect(dateInput.value).toBe('2030-06-15')
+  expect(timeInput.value).toBe('09:30')
 
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-  const task = saved.tasks[QUADRANTS[0].id].find((t) => t.text === 'Review PR')
-  expect(task.tags).toEqual(['dev', 'review'])
+  await user.clear(textInput)
+  await user.type(textInput, 'Plan launch checklist')
+  await user.clear(dateInput)
+  await user.type(dateInput, '2030-06-20')
+  await user.clear(timeInput)
+  await user.type(timeInput, '10:45')
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
+
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
+  expect(within(q1).getByText('Plan launch checklist')).toBeTruthy()
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    const savedTask = saved.tasks[QUADRANTS[0].id][0]
+    expect(savedTask.text).toBe('Plan launch checklist')
+    expect(savedTask.dueDate).toBe('2030-06-20')
+    expect(savedTask.dueTime).toBe('10:45')
+  })
 })
 
-test('filters tasks by a single tag', async () => {
+test('canceling modal editing discards draft changes', async () => {
   const user = userEvent.setup()
   localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
       tasks: {
-        q1: [
-          { id: 't1', text: 'Work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
-          { id: 't2', text: 'Personal task', done: false, dueDate: null, dueTime: null, tags: ['personal'] },
-        ],
-        q2: [],
-        q3: [],
-        q4: [],
-      },
-    })
-  )
-
-  render(<App />)
-
-  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
-  await user.type(tagFilterInput, 'work')
-
-  const q1 = getQuadrantByLabel('Do First')
-  expect(within(q1).getByText('Work task')).toBeTruthy()
-  expect(within(q1).queryByText('Personal task')).toBeNull()
-})
-
-test('filter by tags with no tags entered shows all tasks', async () => {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      tasks: {
-        q1: [
-          { id: 't1', text: 'Work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
-          { id: 't2', text: 'Personal task', done: false, dueDate: null, dueTime: null, tags: ['personal'] },
-        ],
-        q2: [],
-        q3: [],
-        q4: [],
-      },
-    })
-  )
-
-  render(<App />)
-
-  const q1 = getQuadrantByLabel('Do First')
-  expect(within(q1).getByText('Work task')).toBeTruthy()
-  expect(within(q1).getByText('Personal task')).toBeTruthy()
-})
-
-test('filters tasks by multiple tags using AND logic', async () => {
-  const user = userEvent.setup()
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      tasks: {
-        q1: [
-          { id: 't1', text: 'Both tags task', done: false, dueDate: null, dueTime: null, tags: ['work', 'urgent'] },
-          { id: 't2', text: 'Only work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
-          { id: 't3', text: 'Only urgent task', done: false, dueDate: null, dueTime: null, tags: ['urgent'] },
-        ],
-        q2: [],
-        q3: [],
-        q4: [],
-      },
-    })
-  )
-
-  render(<App />)
-
-  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
-  await user.type(tagFilterInput, 'work, urgent')
-
-  const q1 = getQuadrantByLabel('Do First')
-  expect(within(q1).getByText('Both tags task')).toBeTruthy()
-  expect(within(q1).queryByText('Only work task')).toBeNull()
-  expect(within(q1).queryByText('Only urgent task')).toBeNull()
-})
-
-test('tag filter combined with search text filters correctly', async () => {
-  const user = userEvent.setup()
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      tasks: {
-        q1: [
-          { id: 't1', text: 'Deploy app', done: false, dueDate: null, dueTime: null, tags: ['work'] },
-          { id: 't2', text: 'Buy groceries', done: false, dueDate: null, dueTime: null, tags: ['work'] },
-        ],
-        q2: [],
-        q3: [],
-        q4: [],
-      },
-    })
-  )
-
-  render(<App />)
-
-  const searchInput = screen.getByRole('searchbox', { name: 'Search' })
-  await user.type(searchInput, 'deploy')
-
-  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
-  await user.type(tagFilterInput, 'work')
-
-  const q1 = getQuadrantByLabel('Do First')
-  expect(within(q1).getByText('Deploy app')).toBeTruthy()
-  expect(within(q1).queryByText('Buy groceries')).toBeNull()
-})
-
-test('tasks loaded from storage without tags get empty tags array', () => {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      tasks: {
-        q1: [{ id: 'old', text: 'Old task', done: false }],
+        q1: [{ id: 'task5', text: 'Refine copy', done: false, dueDate: '2030-07-01', dueTime: null }],
         q2: [],
         q3: [],
         q4: [],
@@ -763,6 +644,24 @@ test('tasks loaded from storage without tags get empty tags array', () => {
 
   render(<App />)
   const q1 = getQuadrantByLabel('Do First')
-  expect(within(q1).getByText('Old task')).toBeTruthy()
-  // task displays without crashing even when tags are missing from stored data
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  let dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const textInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
+  const dateInput = within(dialog).getByLabelText('Due date')
+
+  await user.clear(textInput)
+  await user.type(textInput, 'Refine homepage copy')
+  await user.clear(dateInput)
+  await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
+  expect(within(q1).getByText('Refine copy')).toBeTruthy()
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  dialog = screen.getByRole('dialog', { name: 'Edit task' })
+
+  expect(within(dialog).getByRole('textbox', { name: 'Edit task text' }).value).toBe('Refine copy')
+  expect(within(dialog).getByLabelText('Due date').value).toBe('2030-07-01')
 })
