@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './TaskEditModal.css'
 
-function TaskEditModal({ isOpen, task, onSave, onCancel }) {
+function TaskEditModal({ task, onSave, onCancel }) {
   const titleId = useId()
   const editInputRef = useRef(null)
   const [draftText, setDraftText] = useState(task.text)
@@ -11,17 +11,6 @@ function TaskEditModal({ isOpen, task, onSave, onCancel }) {
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    if (!isOpen) return
-
-    setDraftText(task.text)
-    setDraftDueDate(task.dueDate ?? '')
-    setDraftDueTime(task.dueTime ?? '')
-    setErrorMessage('')
-  }, [isOpen, task])
-
-  useEffect(() => {
-    if (!isOpen) return
-
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     editInputRef.current?.focus()
@@ -29,7 +18,7 @@ function TaskEditModal({ isOpen, task, onSave, onCancel }) {
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [isOpen])
+  }, [])
 
   function handleCancel() {
     setErrorMessage('')
@@ -52,8 +41,6 @@ function TaskEditModal({ isOpen, task, onSave, onCancel }) {
 
     setErrorMessage('')
   }
-
-  if (!isOpen) return null
 
   return createPortal(
     <div

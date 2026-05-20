@@ -153,12 +153,14 @@ function TaskItem({
 
       <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
 
-      <TaskEditModal
-        isOpen={isEditing}
-        task={task}
-        onSave={handleSave}
-        onCancel={handleCancel}
-      />
+      {isEditing ? (
+        <TaskEditModal
+          key={`${task.id}:${task.text}:${task.dueDate ?? ''}:${task.dueTime ?? ''}`}
+          task={task}
+          onSave={handleSave}
+          onCancel={handleCancel}
+        />
+      ) : null}
     </li>
   )
 }
