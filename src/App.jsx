@@ -2,6 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
+import { createStateService } from './services/StateService'
+
+const stateService = createStateService()
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
@@ -102,16 +105,6 @@ function validateTasksShape(data) {
   return next
 }
 
-function canUseLocalStorage() {
-  try {
-    const probeKey = `${STORAGE_KEY}.probe`
-    localStorage.setItem(probeKey, '1')
-    localStorage.removeItem(probeKey)
-    return true
-  } catch {
-    return false
-  }
-}
 
 function validateImportedTasksShape(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -182,14 +175,13 @@ function defaultConfig() {
 }
 
 function loadState() {
-  if (!canUseLocalStorage()) {
+  if (!stateService.isAvailable()) {
     return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: false }
   }
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
+    const parsed = stateService.get(STORAGE_KEY)
+    if (parsed !== null) {
       const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
       const config = {
         ...defaultConfig(),
@@ -198,10 +190,9 @@ function loadState() {
       return { tasks, config, storageAvailable: true }
     }
 
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (legacy) {
-      const parsed = JSON.parse(legacy)
-      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+    const legacy = stateService.get(LEGACY_STORAGE_KEY)
+    if (legacy !== null) {
+      const tasks = validateTasksShape(legacy.tasks ?? legacy) ?? emptyTasks()
       return { tasks, config: defaultConfig(), storageAvailable: true }
     }
   } catch {
@@ -227,13 +218,10 @@ function App() {
     try {
       const compacted = compactTasks(nextTasks)
       if (Object.keys(compacted).length === 0) {
-        localStorage.removeItem(STORAGE_KEY)
+        stateService.remove(STORAGE_KEY)
         return
       }
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ tasks: compacted, config: { hideCompleted: nextHideCompleted } })
-      )
+      stateService.set(STORAGE_KEY, { tasks: compacted, config: { hideCompleted: nextHideCompleted } })
     } catch {
       setStorageAvailable(false)
     }
