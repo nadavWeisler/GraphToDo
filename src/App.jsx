@@ -343,11 +343,15 @@ function App() {
       return { ok: false, error: 'A similar task already exists in the target quadrant.' }
     }
 
-    updateTasks((prev) => ({
-      ...prev,
-      [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
-      [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
-    }))
+    updateTasks((prev) => {
+      const task = prev[sourceQuadrantId].find((t) => t.id === taskId)
+      if (!task) return prev
+      return {
+        ...prev,
+        [sourceQuadrantId]: prev[sourceQuadrantId].filter((t) => t.id !== taskId),
+        [targetQuadrantId]: [...prev[targetQuadrantId], task],
+      }
+    })
 
     return { ok: true }
   }

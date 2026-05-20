@@ -68,6 +68,38 @@ test('moves a task between quadrants', async () => {
   expect(within(secondRegion).getByText('Send update')).toBeTruthy()
 })
 
+test('preserves task state when moved between quadrants via the move select', async () => {
+  const [firstQuadrant, secondQuadrant] = QUADRANTS
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  await user.type(
+    within(firstRegion).getByRole('textbox', { name: `Add task to ${firstQuadrant.title}` }),
+    'Task to move{enter}'
+  )
+
+  // Mark the task complete before moving it
+  await user.click(within(firstRegion).getByRole('button', { name: 'Mark complete' }))
+
+  // Move the task using the accessible select (keyboard-reachable)
+  const moveSelect = within(firstRegion).getByRole('combobox', { name: 'Move task' })
+  await user.selectOptions(moveSelect, secondQuadrant.id)
+
+  // Task should no longer appear in the source quadrant
+  expect(within(firstRegion).queryByText('Task to move')).toBeNull()
+
+  // Task should appear in the target quadrant with its done state intact
+  const secondRegion = getQuadrantByLabel(secondQuadrant.title)
+  expect(within(secondRegion).getByRole('button', { name: 'Reopen task: Task to move' })).toBeTruthy()
+
+  // Verify persisted storage reflects the correct done state
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  const movedTask = saved.tasks[secondQuadrant.id].find((t) => t.text === 'Task to move')
+  expect(movedTask).toBeDefined()
+  expect(movedTask.done).toBe(true)
+})
+
 test('moves a task between quadrants with drag and drop', async () => {
   const [firstQuadrant, , thirdQuadrant] = QUADRANTS
   const user = userEvent.setup()
