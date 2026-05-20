@@ -48,6 +48,12 @@ function sanitizeTask(task) {
     done: task.done,
     dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
     dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+    ...(typeof task.lastModified === 'number' ? { lastModified: task.lastModified } : {}),
+    ...(typeof task.updatedAt === 'number' || typeof task.updatedAt === 'string'
+      ? { updatedAt: task.updatedAt }
+      : {}),
+    ...(typeof task.quadrantId === 'string' ? { quadrantId: task.quadrantId } : {}),
+    ...(typeof task.quadrant === 'string' ? { quadrant: task.quadrant } : {}),
   }
 }
 
@@ -335,21 +341,40 @@ function App() {
 
   function handleMoveTask(sourceQuadrantId, taskId, targetQuadrantId) {
     if (sourceQuadrantId === targetQuadrantId) return { ok: true }
+    let moveResult = { ok: true }
 
-    const sourceTask = tasks[sourceQuadrantId].find((task) => task.id === taskId)
-    if (!sourceTask) return { ok: false, error: 'Task not found.' }
+    updateTasks((prev) => {
+      const sourceTask = prev[sourceQuadrantId].find((task) => task.id === taskId)
+      if (!sourceTask) {
+        moveResult = { ok: false, error: 'Task not found.' }
+        return prev
+      }
 
-    if (isDuplicate(tasks, targetQuadrantId, sourceTask.text)) {
-      return { ok: false, error: 'A similar task already exists in the target quadrant.' }
-    }
+      if (isDuplicate(prev, targetQuadrantId, sourceTask.text)) {
+        moveResult = { ok: false, error: 'A similar task already exists in the target quadrant.' }
+        return prev
+      }
 
-    updateTasks((prev) => ({
-      ...prev,
-      [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
-      [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
-    }))
+      const movedTask = {
+        ...sourceTask,
+        ...(typeof sourceTask.lastModified === 'number' ? { lastModified: Date.now() } : {}),
+        ...(typeof sourceTask.updatedAt === 'number'
+          ? { updatedAt: Date.now() }
+          : typeof sourceTask.updatedAt === 'string'
+            ? { updatedAt: new Date().toISOString() }
+            : {}),
+        ...(typeof sourceTask.quadrantId === 'string' ? { quadrantId: targetQuadrantId } : {}),
+        ...(typeof sourceTask.quadrant === 'string' ? { quadrant: targetQuadrantId } : {}),
+      }
 
-    return { ok: true }
+      return {
+        ...prev,
+        [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
+        [targetQuadrantId]: [...prev[targetQuadrantId], movedTask],
+      }
+    })
+
+    return moveResult
   }
 
   function handleClearCompleted() {
