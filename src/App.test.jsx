@@ -505,6 +505,79 @@ test('shows due-today indicator for tasks due today', async () => {
   expect(badge).toBeTruthy()
 })
 
+test('persisted state includes a lastUpdated timestamp', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Timestamp task{enter}')
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(typeof saved.lastUpdated).toBe('number')
+  expect(saved.lastUpdated).toBeGreaterThan(0)
+})
+
+test('beforeunload handler flushes latest in-memory state to localStorage', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Unload task{enter}')
+
+  // Trigger beforeunload to simulate hard refresh / tab close
+  fireEvent(window, new Event('beforeunload'))
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Unload task')).toBe(true)
+  expect(typeof saved.lastUpdated).toBe('number')
+})
+
+test('recovers full state after re-mount simulating a hard refresh', async () => {
+  const user = userEvent.setup()
+  const { unmount } = render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Persisted task{enter}')
+
+  // Unmount then re-mount to simulate a hard refresh
+  unmount()
+  render(<App />)
+
+  await waitFor(() => {
+    expect(within(getQuadrantByLabel('Do First')).getByText('Persisted task')).toBeTruthy()
+  })
+})
+
+test('syncs state from another tab via storage event', async () => {
+  render(<App />)
+
+  // Simulate another tab writing to localStorage
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        [QUADRANTS[0].id]: [{ id: 'remote', text: 'Cross-tab task', done: false, dueDate: null, dueTime: null }],
+      },
+      config: { hideCompleted: false },
+      lastUpdated: Date.now(),
+    })
+  )
+
+  // Dispatch the storage event that a browser would fire in sibling tabs
+  fireEvent(
+    window,
+    new StorageEvent('storage', {
+      key: STORAGE_KEY,
+      newValue: localStorage.getItem(STORAGE_KEY),
+      storageArea: localStorage,
+    })
+  )
+
+  await waitFor(() => {
+    expect(within(getQuadrantByLabel('Do First')).getByText('Cross-tab task')).toBeTruthy()
+  })
+})
+
 test('edit task can set and update due date', async () => {
   const user = userEvent.setup()
   localStorage.setItem(
