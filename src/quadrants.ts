@@ -1,12 +1,18 @@
-import type { QuadrantDef } from './types'
+export interface QuadrantConfig {
+  id: string
+  legacyId: string
+  title: string
+  subtitle: string
+  colorClass: string
+}
 
-const LEGACY_QUADRANT_IDS = ['q1', 'q2', 'q3', 'q4']
+const LEGACY_QUADRANT_IDS: string[] = ['q1', 'q2', 'q3', 'q4']
 
 function createQuadrantId(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-export const QUADRANTS: QuadrantDef[] = [
+export const QUADRANTS: QuadrantConfig[] = [
   {
     title: 'Do First',
     subtitle: 'Urgent & Important',
@@ -26,7 +32,7 @@ export const QUADRANTS: QuadrantDef[] = [
 ].map((quadrant, index) => ({
   ...quadrant,
   id: createQuadrantId(quadrant.title),
-  legacyId: LEGACY_QUADRANT_IDS[index],
+  legacyId: LEGACY_QUADRANT_IDS[index] as string,
   colorClass: `q${index + 1}`,
 }))
 

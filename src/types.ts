@@ -6,33 +6,10 @@ export interface Task {
   dueTime: string | null
 }
 
-export interface QuadrantDef {
-  id: string
-  title: string
-  subtitle: string
-  colorClass: string
-  legacyId: string
-}
-
-export type TasksState = Record<string, Task[]>
-
 export interface AppConfig {
   hideCompleted: boolean
 }
 
-export interface AppState {
-  tasks: TasksState
-  config: AppConfig
-  storageAvailable: boolean
-}
+export type TasksState = Record<string, Task[]>
 
-export interface TaskResult {
-  ok: boolean
-  error?: string
-}
-
-export interface EditTaskPayload {
-  text: string
-  dueDate: string | null
-  dueTime: string | null
-}
+export type TaskActionResult = { ok: true } | { ok: false; error: string }
