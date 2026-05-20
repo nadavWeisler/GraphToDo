@@ -1,10 +1,12 @@
+import type { QuadrantDefinition } from './types'
+
 const LEGACY_QUADRANT_IDS = ['q1', 'q2', 'q3', 'q4']
 
-function createQuadrantId(title) {
+function createQuadrantId(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-export const QUADRANTS = [
+export const QUADRANTS: QuadrantDefinition[] = [
   {
     title: 'Do First',
     subtitle: 'Urgent & Important',

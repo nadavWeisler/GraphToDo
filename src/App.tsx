@@ -1,16 +1,39 @@
 import { useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
+import type { QuadrantState, Task, TaskMutationResult } from './types'
+
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
-function emptyTasks() {
-  return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
+type UnknownRecord = Record<string, unknown>
+
+type ValidTaskInput = {
+  id: string
+  text: string
+  done: boolean
+  dueDate?: string | null
+  dueTime?: string | null
 }
 
-function compactTasks(tasks) {
-  const compacted = {}
+interface AppConfig {
+  hideCompleted: boolean
+}
+
+interface LoadStateResult {
+  tasks: QuadrantState
+  config: AppConfig
+  storageAvailable: boolean
+}
+
+function emptyTasks(): QuadrantState {
+  return Object.fromEntries(QUADRANT_IDS.map((id) => [id, [] as Task[]]))
+}
+
+function compactTasks(tasks: QuadrantState): QuadrantState {
+  const compacted: QuadrantState = {}
   for (const { id } of QUADRANTS) {
     const quadrantTasks = tasks[id]
     if (Array.isArray(quadrantTasks) && quadrantTasks.length) {
@@ -20,26 +43,27 @@ function compactTasks(tasks) {
   return compacted
 }
 
-function normalizeText(value) {
+function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-function createTask(text, dueDate = null, dueTime = null) {
+function createTask(text: string, dueDate: string | null = null, dueTime: string | null = null): Task {
   return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime }
 }
 
-function isValidTask(task) {
+function isValidTask(task: unknown): task is ValidTaskInput {
+  if (!task || typeof task !== 'object' || Array.isArray(task)) return false
+  const source = task as UnknownRecord
   return (
-    task &&
-    typeof task.id === 'string' &&
-    typeof task.text === 'string' &&
-    typeof task.done === 'boolean' &&
-    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
-    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string')
+    typeof source.id === 'string' &&
+    typeof source.text === 'string' &&
+    typeof source.done === 'boolean' &&
+    (source.dueDate === undefined || source.dueDate === null || typeof source.dueDate === 'string') &&
+    (source.dueTime === undefined || source.dueTime === null || typeof source.dueTime === 'string')
   )
 }
 
-function sanitizeTask(task) {
+function sanitizeTask(task: ValidTaskInput): Task | null {
   const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
   if (!text) return null
   return {
@@ -51,44 +75,50 @@ function sanitizeTask(task) {
   }
 }
 
-function dueDateSortKey(dueDate) {
+function dueDateSortKey(dueDate: string | null): number {
   if (!dueDate) return Infinity
   return new Date(dueDate + 'T00:00:00').getTime()
 }
 
-function isDuplicate(tasks, quadrantId, text, excludedTaskId = null) {
+function isDuplicate(
+  tasks: QuadrantState,
+  quadrantId: string,
+  text: string,
+  excludedTaskId: string | null = null
+): boolean {
   const normalized = normalizeText(text).toLowerCase()
   return tasks[quadrantId].some(
     (task) => task.id !== excludedTaskId && normalizeText(task.text).toLowerCase() === normalized
   )
 }
 
-function validateTasksShape(data) {
+function validateTasksShape(data: unknown): QuadrantState | null {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null
+  const source = data as UnknownRecord
   const next = emptyTasks()
 
   for (const { id, legacyId } of QUADRANTS) {
-    let quadrantTasks = null
+    let quadrantTasks: unknown[] | null = null
 
-    if (Array.isArray(data[id])) {
-      quadrantTasks = data[id]
-    } else if (Array.isArray(data[legacyId])) {
-      quadrantTasks = data[legacyId]
+    if (Array.isArray(source[id])) {
+      quadrantTasks = source[id]
+    } else if (Array.isArray(source[legacyId])) {
+      quadrantTasks = source[legacyId]
     }
 
     if (quadrantTasks === null) {
-      if (id in data && !Array.isArray(data[id])) return null
-      if (legacyId in data && !Array.isArray(data[legacyId])) return null
+      if (id in source && !Array.isArray(source[id])) return null
+      if (legacyId in source && !Array.isArray(source[legacyId])) return null
       continue
     }
 
     const sanitized = quadrantTasks
       .filter(isValidTask)
       .map(sanitizeTask)
-      .filter(Boolean)
+      .filter((task): task is Task => task !== null)
 
-    const deduped = []
-    const seen = new Set()
+    const deduped: Task[] = []
+    const seen = new Set<string>()
     for (const task of sanitized) {
       const key = normalizeText(task.text).toLowerCase()
       if (seen.has(key)) continue
@@ -102,7 +132,7 @@ function validateTasksShape(data) {
   return next
 }
 
-function canUseLocalStorage() {
+function canUseLocalStorage(): boolean {
   try {
     const probeKey = `${STORAGE_KEY}.probe`
     localStorage.setItem(probeKey, '1')
@@ -113,28 +143,31 @@ function canUseLocalStorage() {
   }
 }
 
-function validateImportedTasksShape(data) {
+function validateImportedTasksShape(data: unknown): QuadrantState {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('Expected an object with q1, q2, q3, and q4 arrays.')
   }
 
+  const source = data as UnknownRecord
   const next = emptyTasks()
 
   for (const { id, legacyId } of QUADRANTS) {
-    const dataKey = id in data ? id : legacyId in data ? legacyId : null
+    const dataKey = id in source ? id : legacyId in source ? legacyId : null
     if (!dataKey) {
       throw new Error(`Missing required quadrant "${id}".`)
     }
 
-    if (!Array.isArray(data[dataKey])) {
+    if (!Array.isArray(source[dataKey])) {
       throw new Error(`Quadrant "${dataKey}" must be an array of tasks.`)
     }
 
-    const sanitized = []
-    for (const [index, task] of data[dataKey].entries()) {
-      if (!task || typeof task !== 'object' || Array.isArray(task)) {
+    const sanitized: Task[] = []
+    for (const [index, rawTask] of source[dataKey].entries()) {
+      if (!rawTask || typeof rawTask !== 'object' || Array.isArray(rawTask)) {
         throw new Error(`Task ${index + 1} in "${dataKey}" must be an object.`)
       }
+
+      const task = rawTask as UnknownRecord
 
       if (typeof task.id !== 'string' || !task.id.trim()) {
         throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "id" string.`)
@@ -162,8 +195,8 @@ function validateImportedTasksShape(data) {
       })
     }
 
-    const deduped = []
-    const seen = new Set()
+    const deduped: Task[] = []
+    const seen = new Set<string>()
     for (const task of sanitized) {
       const key = normalizeText(task.text).toLowerCase()
       if (seen.has(key)) continue
@@ -177,11 +210,22 @@ function validateImportedTasksShape(data) {
   return next
 }
 
-function defaultConfig() {
+function defaultConfig(): AppConfig {
   return { hideCompleted: false }
 }
 
-function loadState() {
+function parseConfig(config: unknown): AppConfig {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return defaultConfig()
+  }
+
+  const source = config as UnknownRecord
+  return {
+    hideCompleted: typeof source.hideCompleted === 'boolean' ? source.hideCompleted : false,
+  }
+}
+
+function loadState(): LoadStateResult {
   if (!canUseLocalStorage()) {
     return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: false }
   }
@@ -189,18 +233,15 @@ function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const parsed = JSON.parse(raw)
+      const parsed = JSON.parse(raw) as UnknownRecord
       const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
-      const config = {
-        ...defaultConfig(),
-        ...(parsed.config && typeof parsed.config === 'object' ? parsed.config : {}),
-      }
+      const config = parseConfig(parsed.config)
       return { tasks, config, storageAvailable: true }
     }
 
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (legacy) {
-      const parsed = JSON.parse(legacy)
+      const parsed = JSON.parse(legacy) as UnknownRecord
       const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
       return { tasks, config: defaultConfig(), storageAvailable: true }
     }
@@ -211,18 +252,16 @@ function loadState() {
 }
 
 function App() {
-  const [initialState] = useState(loadState)
-  const [tasks, setTasks] = useState(initialState.tasks)
-  const [storageAvailable, setStorageAvailable] = useState(
-    initialState.storageAvailable
-  )
-  const [searchQuery, setSearchQuery] = useState('')
-  const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
-  const [sortByDueDate, setSortByDueDate] = useState(false)
-  const [statusMessage, setStatusMessage] = useState('')
-  const importInputRef = useRef(null)
+  const [initialState] = useState<LoadStateResult>(loadState)
+  const [tasks, setTasks] = useState<QuadrantState>(initialState.tasks)
+  const [storageAvailable, setStorageAvailable] = useState<boolean>(initialState.storageAvailable)
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [hideCompleted, setHideCompleted] = useState<boolean>(initialState.config.hideCompleted)
+  const [sortByDueDate, setSortByDueDate] = useState<boolean>(false)
+  const [statusMessage, setStatusMessage] = useState<string>('')
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  function persistState(nextTasks, nextHideCompleted = hideCompleted) {
+  function persistState(nextTasks: QuadrantState, nextHideCompleted: boolean = hideCompleted): void {
     if (!storageAvailable) return
     try {
       const compacted = compactTasks(nextTasks)
@@ -239,7 +278,7 @@ function App() {
     }
   }
 
-  function updateTasks(nextOrUpdater) {
+  function updateTasks(nextOrUpdater: QuadrantState | ((prev: QuadrantState) => QuadrantState)): void {
     setTasks((prev) => {
       const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(prev) : nextOrUpdater
       persistState(next)
@@ -249,7 +288,7 @@ function App() {
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
-  const visibleTasks = useMemo(() => {
+  const visibleTasks = useMemo<QuadrantState>(() => {
     const next = emptyTasks()
     for (const { id } of QUADRANTS) {
       let filtered = tasks[id].filter((task) => {
@@ -258,16 +297,19 @@ function App() {
         return task.text.toLowerCase().includes(normalizedSearch)
       })
       if (sortByDueDate) {
-        filtered = [...filtered].sort(
-          (a, b) => dueDateSortKey(a.dueDate) - dueDateSortKey(b.dueDate)
-        )
+        filtered = [...filtered].sort((a, b) => dueDateSortKey(a.dueDate) - dueDateSortKey(b.dueDate))
       }
       next[id] = filtered
     }
     return next
   }, [hideCompleted, normalizedSearch, sortByDueDate, tasks])
 
-  function handleAddTask(quadrantId, text, dueDate = null, dueTime = null) {
+  function handleAddTask(
+    quadrantId: string,
+    text: string,
+    dueDate: string | null = null,
+    dueTime: string | null = null
+  ): TaskMutationResult {
     const cleanText = normalizeText(text)
 
     if (!cleanText) {
@@ -290,23 +332,29 @@ function App() {
     return { ok: true }
   }
 
-  function handleToggleTask(quadrantId, taskId) {
+  function handleToggleTask(quadrantId: string, taskId: string): void {
     updateTasks((prev) => ({
       ...prev,
-      [quadrantId]: prev[quadrantId].map((t) =>
-        t.id === taskId ? { ...t, done: !t.done } : t
+      [quadrantId]: prev[quadrantId].map((task) =>
+        task.id === taskId ? { ...task, done: !task.done } : task
       ),
     }))
   }
 
-  function handleDeleteTask(quadrantId, taskId) {
+  function handleDeleteTask(quadrantId: string, taskId: string): void {
     updateTasks((prev) => ({
       ...prev,
-      [quadrantId]: prev[quadrantId].filter((t) => t.id !== taskId),
+      [quadrantId]: prev[quadrantId].filter((task) => task.id !== taskId),
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null) {
+  function handleEditTask(
+    quadrantId: string,
+    taskId: string,
+    nextText: string,
+    dueDate: string | null = null,
+    dueTime: string | null = null
+  ): TaskMutationResult {
     const cleanText = normalizeText(nextText)
 
     if (!cleanText) {
@@ -333,7 +381,11 @@ function App() {
     return { ok: true }
   }
 
-  function handleMoveTask(sourceQuadrantId, taskId, targetQuadrantId) {
+  function handleMoveTask(
+    sourceQuadrantId: string,
+    taskId: string,
+    targetQuadrantId: string
+  ): TaskMutationResult {
     if (sourceQuadrantId === targetQuadrantId) return { ok: true }
 
     const sourceTask = tasks[sourceQuadrantId].find((task) => task.id === taskId)
@@ -352,7 +404,7 @@ function App() {
     return { ok: true }
   }
 
-  function handleClearCompleted() {
+  function handleClearCompleted(): void {
     updateTasks((prev) => {
       const next = emptyTasks()
 
@@ -365,7 +417,7 @@ function App() {
     setStatusMessage('Completed tasks cleared.')
   }
 
-  function handleExport() {
+  function handleExport(): void {
     const payload = {
       version: EXPORT_SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
@@ -384,13 +436,13 @@ function App() {
     setStatusMessage('Tasks exported to JSON.')
   }
 
-  async function handleImport(event) {
+  async function handleImport(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0]
     if (!file) return
 
     try {
       const text = await file.text()
-      const parsed = JSON.parse(text)
+      const parsed = JSON.parse(text) as UnknownRecord
       const imported = validateImportedTasksShape(parsed.tasks ?? parsed)
 
       updateTasks(imported)
@@ -414,9 +466,7 @@ function App() {
     }
   }
 
-  const hasCompletedTasks = QUADRANTS.some(({ id }) =>
-    tasks[id].some((task) => task.done)
-  )
+  const hasCompletedTasks = QUADRANTS.some(({ id }) => tasks[id].some((task) => task.done))
 
   return (
     <div className="app">
