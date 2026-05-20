@@ -42,6 +42,17 @@ function Quadrant({
     addInputRef.current?.focus()
   }
 
+  function handleInputChange(event) {
+    setInput(event.target.value)
+    if (errorMessage) setErrorMessage('')
+  }
+
+  function handleInputBlur() {
+    if (input.length > 0 && !input.trim()) {
+      setErrorMessage('Task cannot be empty.')
+    }
+  }
+
   function handleTaskDragStart(event, sourceQuadrantId, taskId) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData(
@@ -132,9 +143,12 @@ function Quadrant({
             id={`add-${id}`}
             type="text"
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={handleInputChange}
+            onBlur={handleInputBlur}
             placeholder="Add a task…"
-            {...(errorMessage ? { 'aria-describedby': `error-${id}` } : {})}
+            className={errorMessage ? 'input--error' : undefined}
+            aria-describedby={`error-${id}`}
+            aria-invalid={errorMessage ? 'true' : undefined}
             maxLength={120}
           />
           <button type="submit" aria-label={`Add task to ${title}`}>+</button>
@@ -161,7 +175,17 @@ function Quadrant({
       </form>
 
       <p className="input-error" id={`error-${id}`} role="status" aria-live="polite">
-        {errorMessage}
+        {errorMessage && <span>{errorMessage}</span>}
+        {errorMessage && (
+          <button
+            type="button"
+            className="error-dismiss-btn"
+            onClick={() => setErrorMessage('')}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        )}
       </p>
     </section>
   )

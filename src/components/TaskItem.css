@@ -131,6 +131,12 @@
   border-radius: 6px;
   padding: 0.25rem 0.4rem;
   font-size: 0.85rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.task-edit-input--error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 .task-date-input {
@@ -185,6 +191,26 @@
   min-height: 0.9rem;
   font-size: 0.68rem;
   color: #991b1b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.error-dismiss-btn {
+  background: none;
+  border: none;
+  color: #991b1b;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.error-dismiss-btn:hover {
+  opacity: 1;
 }
 
 @media (max-width: 720px) {

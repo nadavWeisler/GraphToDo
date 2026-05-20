@@ -66,6 +66,17 @@ function TaskItem({
     setErrorMessage('')
   }
 
+  function handleEditChange(event) {
+    setDraftText(event.target.value)
+    if (errorMessage) setErrorMessage('')
+  }
+
+  function handleEditBlur() {
+    if (!draftText.trim()) {
+      setErrorMessage('Task cannot be empty.')
+    }
+  }
+
   function handleMove(event) {
     const target = event.target.value
     const result = onMove(target)
@@ -116,11 +127,14 @@ function TaskItem({
             <input
               ref={editInputRef}
               id={`edit-${task.id}`}
-              className="task-edit-input"
+              className={`task-edit-input${errorMessage ? ' task-edit-input--error' : ''}`}
               type="text"
               value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
+              onChange={handleEditChange}
+              onBlur={handleEditBlur}
               maxLength={120}
+              aria-describedby={`item-error-${task.id}`}
+              aria-invalid={errorMessage ? 'true' : undefined}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
                   handleCancel()
@@ -209,7 +223,19 @@ function TaskItem({
         ×
       </button>
 
-      <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
+      <p className="item-error" id={`item-error-${task.id}`} role="status" aria-live="polite">
+        {errorMessage && <span>{errorMessage}</span>}
+        {errorMessage && (
+          <button
+            type="button"
+            className="error-dismiss-btn"
+            onClick={() => setErrorMessage('')}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        )}
+      </p>
     </li>
   )
 }
