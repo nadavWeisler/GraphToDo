@@ -1,8 +1,30 @@
 import { useRef, useState } from 'react'
 import TaskItem from './TaskItem'
 import './Quadrant.css'
+import type { Task, QuadrantDef, TaskResult } from '../types'
 
 const TASK_DRAG_MIME_TYPE = 'application/x-graphtodo-task'
+
+interface DragPayload {
+  sourceQuadrantId: string
+  taskId: string
+}
+
+interface QuadrantProps {
+  id: string
+  title: string
+  subtitle: string
+  colorClass: string
+  tasks: Task[]
+  totalCount: number
+  visibleCount: number
+  quadrants: QuadrantDef[]
+  onAddTask: (quadrantId: string, text: string, dueDate: string | null, dueTime: string | null) => TaskResult
+  onToggleTask: (quadrantId: string, taskId: string) => void
+  onDeleteTask: (quadrantId: string, taskId: string) => void
+  onEditTask: (quadrantId: string, taskId: string, text: string, dueDate: string | null, dueTime: string | null) => TaskResult
+  onMoveTask: (sourceQuadrantId: string, taskId: string, targetQuadrantId: string) => TaskResult
+}
 
 function Quadrant({
   id,
@@ -18,38 +40,15 @@ function Quadrant({
   onDeleteTask,
   onEditTask,
   onMoveTask,
-  activeMoveTask,
-  onStartTaskMove,
-  onCancelTaskMove,
-}) {
-  const [input, setInput] = useState('')
-  const [addDueDate, setAddDueDate] = useState('')
-  const [addDueTime, setAddDueTime] = useState('')
-  const [addTags, setAddTags] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const addInputRef = useRef(null)
-  const [isDragOver, setIsDragOver] = useState(false)
-  const titleId = `quadrant-title-${id}`
-  const labelId = `quadrant-label-${id}`
-  const countId = `quadrant-count-${id}`
-  const instructionsId = `quadrant-instructions-${id}`
+}: QuadrantProps) {
+  const [input, setInput] = useState<string>('')
+  const [addDueDate, setAddDueDate] = useState<string>('')
+  const [addDueTime, setAddDueTime] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string>('')
+  const addInputRef = useRef<HTMLInputElement>(null)
+  const [isDragOver, setIsDragOver] = useState<boolean>(false)
 
-  function getMovePayload(event) {
-    if (activeMoveTask) {
-      return activeMoveTask
-    }
-
-    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
-    if (!rawPayload) return null
-
-    try {
-      return JSON.parse(rawPayload)
-    } catch {
-      return null
-    }
-  }
-
-  function handleAdd(event) {
+  function handleAdd(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault()
     const tags = addTags
       .split(',')
@@ -58,7 +57,7 @@ function Quadrant({
     const result = onAddTask(id, input, addDueDate || null, addDueTime || null, tags)
 
     if (!result.ok) {
-      setErrorMessage(result.error)
+      setErrorMessage(result.error ?? '')
       return
     }
 
@@ -70,8 +69,7 @@ function Quadrant({
     addInputRef.current?.focus()
   }
 
-  function handleTaskDragStart(event, sourceQuadrantId, taskId) {
-    onStartTaskMove(sourceQuadrantId, taskId)
+  function handleTaskDragStart(event: React.DragEvent<HTMLLIElement>, sourceQuadrantId: string, taskId: string): void {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData(
       TASK_DRAG_MIME_TYPE,
@@ -79,7 +77,7 @@ function Quadrant({
     )
   }
 
-  function handleDragOver(event) {
+  function handleDragOver(event: React.DragEvent<HTMLElement>): void {
     if (!event.dataTransfer.types.includes(TASK_DRAG_MIME_TYPE)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
@@ -88,18 +86,30 @@ function Quadrant({
     }
   }
 
-  function handleDragLeave(event) {
-    if (!event.currentTarget.contains(event.relatedTarget)) {
+  function handleDragLeave(event: React.DragEvent<HTMLElement>): void {
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
       setIsDragOver(false)
     }
   }
 
-  function handleDrop(event) {
+  function handleDrop(event: React.DragEvent<HTMLElement>): void {
     event.preventDefault()
     setIsDragOver(false)
 
-    const payload = getMovePayload(event)
-    if (!payload) {
+    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
+    if (!rawPayload) return
+
+    try {
+      const { sourceQuadrantId, taskId } = JSON.parse(rawPayload) as DragPayload
+      const result = onMoveTask(sourceQuadrantId, taskId, id)
+
+      if (!result.ok) {
+        setErrorMessage(result.error ?? '')
+        return
+      }
+
+      setErrorMessage('')
+    } catch {
       setErrorMessage('Unable to move the dropped task.')
       return
     }

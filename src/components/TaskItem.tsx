@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
+import type { Task, QuadrantDef, TaskResult, EditTaskPayload } from '../types'
 
-function formatDueDateLabel(dueDate, dueTime) {
+interface DueDateInfo {
+  label: string
+  urgency: 'overdue' | 'today' | 'soon' | 'normal'
+}
+
+function formatDueDateLabel(dueDate: string | null, dueTime: string | null): DueDateInfo | null {
   if (!dueDate) return null
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dueDate + 'T00:00:00')
   if (isNaN(due.getTime())) return null
-  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
   const timeStr = dueTime ? ` ${dueTime}` : ''
 
   if (diffDays < 0) return { label: `Overdue${timeStr}`, urgency: 'overdue' }
@@ -21,6 +27,18 @@ function formatDueDateLabel(dueDate, dueTime) {
   }
 }
 
+interface TaskItemProps {
+  task: Task
+  quadrants: QuadrantDef[]
+  currentQuadrantId: string
+  onToggle: () => void
+  onDelete: () => void
+  onSave: (payload: EditTaskPayload) => TaskResult
+  onMove: (targetQuadrantId: string) => TaskResult
+  onDragStart: (event: React.DragEvent<HTMLLIElement>, sourceQuadrantId: string, taskId: string) => void
+  onDragEnd: () => void
+}
+
 function TaskItem({
   task,
   quadrants,
@@ -31,23 +49,15 @@ function TaskItem({
   onMove,
   onDragStart,
   onDragEnd,
-  activeMoveTask,
-  onStartTaskMove,
-  onCancelTaskMove,
-}) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [draftText, setDraftText] = useState(task.text)
-  const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
-  const [draftDueTime, setDraftDueTime] = useState(task.dueTime ?? '')
-  const [draftTags, setDraftTags] = useState((task.tags ?? []).join(', '))
-  const [errorMessage, setErrorMessage] = useState('')
-  const editInputRef = useRef(null)
-  const editButtonRef = useRef(null)
-  const shouldRestoreFocusRef = useRef(false)
-  const isMoveActive =
-    activeMoveTask?.sourceQuadrantId === currentQuadrantId && activeMoveTask?.taskId === task.id
-  const instructionsId = `task-move-instructions-${task.id}`
-  const errorId = `task-error-${task.id}`
+}: TaskItemProps) {
+  const [isEditing, setIsEditing] = useState<boolean>(false)
+  const [draftText, setDraftText] = useState<string>(task.text)
+  const [draftDueDate, setDraftDueDate] = useState<string>(task.dueDate ?? '')
+  const [draftDueTime, setDraftDueTime] = useState<string>(task.dueTime ?? '')
+  const [errorMessage, setErrorMessage] = useState<string>('')
+  const editInputRef = useRef<HTMLInputElement>(null)
+  const editButtonRef = useRef<HTMLButtonElement>(null)
+  const shouldRestoreFocusRef = useRef<boolean>(false)
 
   useEffect(() => {
     if (isEditing) {
@@ -61,7 +71,7 @@ function TaskItem({
     }
   }, [isEditing])
 
-  function handleSave(event) {
+  function handleSave(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault()
     const tags = draftTags
       .split(',')
@@ -69,7 +79,7 @@ function TaskItem({
       .filter(Boolean)
     const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null, tags })
     if (!result.ok) {
-      setErrorMessage(result.error)
+      setErrorMessage(result.error ?? '')
       return
     }
 
@@ -78,18 +88,18 @@ function TaskItem({
     setErrorMessage('')
   }
 
-  function handleMove(event) {
+  function handleMove(event: React.ChangeEvent<HTMLSelectElement>): void {
     const target = event.target.value
     const result = onMove(target)
     if (!result.ok) {
-      setErrorMessage(result.error)
+      setErrorMessage(result.error ?? '')
       return
     }
 
     setErrorMessage('')
   }
 
-  function handleCancel() {
+  function handleCancel(): void {
     setDraftText(task.text)
     setDraftDueDate(task.dueDate ?? '')
     setDraftDueTime(task.dueTime ?? '')
