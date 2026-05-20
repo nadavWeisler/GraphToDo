@@ -100,6 +100,57 @@ test('moves a task between quadrants', async () => {
   expect(within(secondRegion).getByText('Send update')).toBeTruthy()
 })
 
+test('moves a task with keyboard controls and updates move metadata atomically', async () => {
+  const [firstQuadrant, secondQuadrant] = QUADRANTS
+  const user = userEvent.setup()
+  const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        [firstQuadrant.id]: [
+          {
+            id: 'task-with-metadata',
+            text: 'Ship release',
+            done: false,
+            dueDate: null,
+            dueTime: null,
+            lastModified: 123,
+            quadrantId: firstQuadrant.id,
+          },
+        ],
+        [secondQuadrant.id]: [],
+        ...Object.fromEntries(QUADRANTS.slice(2).map((quadrant) => [quadrant.id, []])),
+      },
+    })
+  )
+
+  try {
+    render(<App />)
+
+    const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+    const moveSelect = within(firstRegion).getByRole('combobox', { name: 'Move task' })
+    moveSelect.focus()
+    await user.keyboard('{ArrowDown}')
+    await user.selectOptions(moveSelect, secondQuadrant.id)
+
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+      expect(saved.tasks[firstQuadrant.id]).toBeUndefined()
+      expect(saved.tasks[secondQuadrant.id]).toHaveLength(1)
+      expect(saved.tasks[secondQuadrant.id][0]).toMatchObject({
+        id: 'task-with-metadata',
+        text: 'Ship release',
+        lastModified: 1_700_000_000_000,
+        quadrantId: secondQuadrant.id,
+      })
+    })
+  } finally {
+    nowSpy.mockRestore()
+  }
+})
+
 test('moves a task between quadrants with drag and drop', async () => {
   const [firstQuadrant, , thirdQuadrant] = QUADRANTS
   const user = userEvent.setup()
