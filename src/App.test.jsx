@@ -360,6 +360,68 @@ test('falls back to in-memory tasks when localStorage is unavailable', async () 
   }
 })
 
+test('loads persisted tasks when writes are blocked but reads still work (quota exceeded)', async () => {
+  const firstQuadrant = QUADRANTS[0]
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: { [firstQuadrant.id]: [{ id: 'q-task', text: 'Quota task', done: false }] },
+      config: { hideCompleted: false },
+    })
+  )
+
+  const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new Error('QuotaExceededError')
+  })
+  const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    throw new Error('QuotaExceededError')
+  })
+
+  try {
+    render(<App />)
+
+    expect(within(getQuadrantByLabel(firstQuadrant.title)).getByText('Quota task')).toBeTruthy()
+
+    expect(
+      screen.getByText(
+        'Local storage is unavailable. Tasks are only kept in memory and may be lost on refresh.'
+      )
+    ).toBeTruthy()
+  } finally {
+    setItemSpy.mockRestore()
+    removeItemSpy.mockRestore()
+  }
+})
+
+test('falls back to defaults when localStorage contains corrupted JSON', () => {
+  localStorage.setItem(STORAGE_KEY, 'this is not valid json {{{{')
+
+  render(<App />)
+
+  for (const quadrant of QUADRANTS) {
+    expect(within(getQuadrantByLabel(quadrant.title)).queryAllByRole('listitem')).toHaveLength(0)
+  }
+})
+
+test('loads state from localStorage on hard refresh (simulated re-mount with persisted data)', () => {
+  const firstQuadrant = QUADRANTS[0]
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        [firstQuadrant.id]: [{ id: 'persist-1', text: 'Survived refresh', done: false }],
+      },
+      config: { hideCompleted: false },
+    })
+  )
+
+  render(<App />)
+
+  expect(
+    within(getQuadrantByLabel(firstQuadrant.title)).getByText('Survived refresh')
+  ).toBeTruthy()
+})
+
 test('drag-over applies visual feedback class on quadrant', async () => {
   const user = userEvent.setup()
   render(<App />)

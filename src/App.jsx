@@ -182,9 +182,7 @@ function defaultConfig() {
 }
 
 function loadState() {
-  if (!canUseLocalStorage()) {
-    return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: false }
-  }
+  const storageAvailable = canUseLocalStorage()
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -195,19 +193,19 @@ function loadState() {
         ...defaultConfig(),
         ...(parsed.config && typeof parsed.config === 'object' ? parsed.config : {}),
       }
-      return { tasks, config, storageAvailable: true }
+      return { tasks, config, storageAvailable }
     }
 
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (legacy) {
       const parsed = JSON.parse(legacy)
       const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
-      return { tasks, config: defaultConfig(), storageAvailable: true }
+      return { tasks, config: defaultConfig(), storageAvailable }
     }
   } catch {
     // fall through to defaults
   }
-  return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: true }
+  return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable }
 }
 
 function App() {
