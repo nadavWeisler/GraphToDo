@@ -112,40 +112,6 @@
   outline-offset: 2px;
   border-radius: 4px;
 }
-.edit-task-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.edit-row {
-  display: flex;
-  gap: 0.35rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.task-edit-input {
-  min-width: 130px;
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  padding: 0.25rem 0.4rem;
-  font-size: 0.85rem;
-}
-
-.task-date-input {
-  border: 1px solid rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
-  padding: 0.22rem 0.4rem;
-  font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.task-date-input:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .task-action-btn {
   border: 1px solid rgba(0, 0, 0, 0.25);
   background: rgba(255, 255, 255, 0.7);
@@ -199,21 +165,8 @@
     height: 28px;
   }
 
-  .task-text,
-  .edit-task-form {
+  .task-text {
     grid-column: 2 / -1;
-  }
-
-  .edit-task-form {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    width: 100%;
-  }
-
-  .task-edit-input {
-    grid-column: 1 / -1;
-    min-width: 0;
-    min-height: 36px;
   }
 
   .delete-btn {

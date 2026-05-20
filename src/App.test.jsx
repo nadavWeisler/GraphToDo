@@ -249,13 +249,15 @@ test('moves focus into and out of the edit form logically', async () => {
   const editButton = within(q1).getByRole('button', { name: 'Edit task' })
   await user.click(editButton)
 
-  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const editInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
   expect(document.activeElement).toBe(editInput)
 
   await user.clear(editInput)
   await user.type(editInput, 'Draft summary updated{enter}')
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
 })
 
 test('returns focus to the edit button when editing is cancelled', async () => {
@@ -266,11 +268,13 @@ test('returns focus to the edit button when editing is cancelled', async () => {
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Review notes{enter}')
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
-  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const editInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
 
   await user.type(editInput, '{Escape}')
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
 })
 
 test('imports valid JSON tasks and shows success message', async () => {
@@ -401,10 +405,11 @@ test('can set and display a due date on a task', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
 
-  const dueDateInput = within(q1).getByLabelText('Due date')
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const dueDateInput = within(dialog).getByLabelText('Due date')
   await user.type(dueDateInput, '2099-12-31')
 
-  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
 
   expect(within(q1).getByLabelText(/Due:/)).toBeTruthy()
 })
@@ -524,11 +529,98 @@ test('edit task can set and update due date', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
 
-  const dateInput = within(q1).getByLabelText('Due date')
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const dateInput = within(dialog).getByLabelText('Due date')
   await user.type(dateInput, '2030-06-15')
 
-  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
 
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
   expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
+})
+
+test('edit task opens a modal with current values and saves updates', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task4', text: 'Plan launch', done: false, dueDate: '2030-06-15', dueTime: '09:30' }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const textInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
+  const dateInput = within(dialog).getByLabelText('Due date')
+  const timeInput = within(dialog).getByLabelText('Due time')
+
+  expect(textInput.value).toBe('Plan launch')
+  expect(dateInput.value).toBe('2030-06-15')
+  expect(timeInput.value).toBe('09:30')
+
+  await user.clear(textInput)
+  await user.type(textInput, 'Plan launch checklist')
+  await user.clear(dateInput)
+  await user.type(dateInput, '2030-06-20')
+  await user.clear(timeInput)
+  await user.type(timeInput, '10:45')
+  await user.click(within(dialog).getByRole('button', { name: 'Save task' }))
+
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
+  expect(within(q1).getByText('Plan launch checklist')).toBeTruthy()
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    const savedTask = saved.tasks[QUADRANTS[0].id][0]
+    expect(savedTask.text).toBe('Plan launch checklist')
+    expect(savedTask.dueDate).toBe('2030-06-20')
+    expect(savedTask.dueTime).toBe('10:45')
+  })
+})
+
+test('canceling modal editing discards draft changes', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task5', text: 'Refine copy', done: false, dueDate: '2030-07-01', dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  let dialog = screen.getByRole('dialog', { name: 'Edit task' })
+  const textInput = within(dialog).getByRole('textbox', { name: 'Edit task text' })
+  const dateInput = within(dialog).getByLabelText('Due date')
+
+  await user.clear(textInput)
+  await user.type(textInput, 'Refine homepage copy')
+  await user.clear(dateInput)
+  await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+  expect(screen.queryByRole('dialog', { name: 'Edit task' })).toBe(null)
+  expect(within(q1).getByText('Refine copy')).toBeTruthy()
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  dialog = screen.getByRole('dialog', { name: 'Edit task' })
+
+  expect(within(dialog).getByRole('textbox', { name: 'Edit task text' }).value).toBe('Refine copy')
+  expect(within(dialog).getByLabelText('Due date').value).toBe('2030-07-01')
 })
