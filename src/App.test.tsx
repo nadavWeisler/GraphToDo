@@ -413,6 +413,122 @@ test('shows validation error for duplicate tasks in same quadrant', async () => 
   expect(within(firstRegion).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
 })
 
+test('highlights add input with error class on validation failure', async () => {
+  const firstQuadrant = QUADRANTS[0]
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  const addInput = within(firstRegion).getByRole('textbox', {
+    name: `Add task to ${firstQuadrant.title}`,
+  })
+
+  await user.type(addInput, 'Buy groceries{enter}')
+  await user.type(addInput, 'Buy groceries{enter}')
+
+  expect(addInput.classList.contains('input--error')).toBe(true)
+  expect(addInput.getAttribute('aria-invalid')).toBe('true')
+})
+
+test('dismiss button clears the add-input validation error', async () => {
+  const firstQuadrant = QUADRANTS[0]
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  const addInput = within(firstRegion).getByRole('textbox', {
+    name: `Add task to ${firstQuadrant.title}`,
+  })
+
+  await user.type(addInput, 'Call dentist{enter}')
+  await user.type(addInput, 'Call dentist{enter}')
+
+  expect(within(firstRegion).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
+
+  await user.click(within(firstRegion).getByRole('button', { name: 'Dismiss error' }))
+
+  expect(within(firstRegion).queryByText('A similar task already exists in this quadrant.')).toBeNull()
+  expect(addInput.classList.contains('input--error')).toBe(false)
+})
+
+test('typing in the add input clears an existing validation error', async () => {
+  const firstQuadrant = QUADRANTS[0]
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  const addInput = within(firstRegion).getByRole('textbox', {
+    name: `Add task to ${firstQuadrant.title}`,
+  })
+
+  await user.type(addInput, 'Review PR{enter}')
+  await user.type(addInput, 'Review PR{enter}')
+
+  expect(within(firstRegion).getByText('A similar task already exists in this quadrant.')).toBeTruthy()
+
+  await user.type(addInput, 'x')
+
+  expect(within(firstRegion).queryByText('A similar task already exists in this quadrant.')).toBeNull()
+  expect(addInput.classList.contains('input--error')).toBe(false)
+})
+
+test('blurring add input with only whitespace shows empty error', async () => {
+  const firstQuadrant = QUADRANTS[0]
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  const addInput = within(firstRegion).getByRole('textbox', {
+    name: `Add task to ${firstQuadrant.title}`,
+  })
+
+  await user.click(addInput)
+  await user.type(addInput, '   ')
+  await user.tab()
+
+  expect(within(firstRegion).getByText('Task cannot be empty.')).toBeTruthy()
+  expect(addInput.classList.contains('input--error')).toBe(true)
+})
+
+test('highlights edit input with error class on validation failure', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Write docs{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  await user.clear(editInput)
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  expect(editInput.classList.contains('task-edit-input--error')).toBe(true)
+  expect(editInput.getAttribute('aria-invalid')).toBe('true')
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+})
+
+test('dismiss button clears the edit input validation error', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Update readme{enter}')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  await user.clear(editInput)
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  expect(within(q1).getByText('Task cannot be empty.')).toBeTruthy()
+
+  await user.click(within(q1).getByRole('button', { name: 'Dismiss error' }))
+
+  expect(within(q1).queryByText('Task cannot be empty.')).toBeNull()
+  expect(editInput.classList.contains('task-edit-input--error')).toBe(false)
+})
+
 test('keeps focus on the add input after creating a task', async () => {
   const user = userEvent.setup()
   render(<App />)
