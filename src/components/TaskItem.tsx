@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import TaskEditModal from './TaskEditModal'
 import './TaskItem.css'
-import TaskEditModal from './TaskEditModal'
+import type { EditTaskPayload, QuadrantDef, Task, TaskResult } from '../types'
 
 interface DueDateInfo {
   label: string
@@ -31,6 +31,7 @@ function formatDueDateLabel(dueDate: string | null, dueTime: string | null): Due
 interface TaskItemProps {
   task: Task
   quadrants: QuadrantDef[]
+  announcementId: string
   currentQuadrantId: string
   onToggle: () => void
   onDelete: () => void
@@ -51,7 +52,7 @@ function TaskItem({
   onMove,
   onDragStart,
   onDragEnd,
-}) {
+}: TaskItemProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const editButtonRef = useRef(null)
@@ -64,7 +65,7 @@ function TaskItem({
     }
   }, [isEditModalOpen])
 
-  function handleMove(event) {
+  function handleMove(event: React.ChangeEvent<HTMLSelectElement>) {
     const target = event.target.value
     const result = onMove(target)
     if (!result.ok) {

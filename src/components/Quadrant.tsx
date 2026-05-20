@@ -24,6 +24,9 @@ interface QuadrantProps {
   onDeleteTask: (quadrantId: string, taskId: string) => void
   onEditTask: (quadrantId: string, taskId: string, text: string, dueDate: string | null, dueTime: string | null) => TaskResult
   onMoveTask: (sourceQuadrantId: string, taskId: string, targetQuadrantId: string) => TaskResult
+  activeMoveTask: { sourceQuadrantId: string; taskId: string } | null
+  onStartTaskMove: (sourceQuadrantId: string, taskId: string) => TaskResult
+  onCancelTaskMove: (message?: string) => void
 }
 
 function Quadrant({
@@ -40,13 +43,21 @@ function Quadrant({
   onDeleteTask,
   onEditTask,
   onMoveTask,
+  activeMoveTask,
+  onStartTaskMove,
+  onCancelTaskMove,
 }: QuadrantProps) {
   const [input, setInput] = useState<string>('')
   const [addDueDate, setAddDueDate] = useState<string>('')
   const [addDueTime, setAddDueTime] = useState<string>('')
+  const [addTags, setAddTags] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const addInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState<boolean>(false)
+  const titleId = `quadrant-title-${id}`
+  const labelId = `quadrant-label-${id}`
+  const countId = `quadrant-count-${id}`
+  const instructionsId = `quadrant-instructions-${id}`
 
   function handleAdd(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault()
@@ -114,13 +125,6 @@ function Quadrant({
       return
     }
 
-    const result = onMoveTask(payload.sourceQuadrantId, payload.taskId, id)
-    if (!result.ok) {
-      setErrorMessage(result.error)
-      return
-    }
-
-    setErrorMessage('')
   }
 
   function handleKeyboardDrop(event) {

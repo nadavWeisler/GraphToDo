@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
-import type { Task, TasksState, AppConfig, AppState, TaskResult } from './types'
+import type { Task, TasksState, AppConfig, TaskResult } from './types'
 
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
@@ -121,22 +121,21 @@ function isValidTask(task: unknown): task is Task {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return false
   const t = task as Record<string, unknown>
   return (
-    task &&
-    typeof task.id === 'string' &&
-    typeof task.text === 'string' &&
-    typeof task.done === 'boolean' &&
-    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
-    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string') &&
-    (task.history === undefined || isValidHistory(task.history)) &&
-    (task.completedAt === undefined ||
-      task.completedAt === null ||
-      typeof task.completedAt === 'string') &&
-    (task.archivedAt === undefined ||
-      task.archivedAt === null ||
-      typeof task.archivedAt === 'string') &&
-    (task.archiveReason === undefined ||
-      task.archiveReason === null ||
-      typeof task.archiveReason === 'string')
+    typeof t.id === 'string' &&
+    typeof t.text === 'string' &&
+    typeof t.done === 'boolean' &&
+    (t.dueDate === undefined || t.dueDate === null || typeof t.dueDate === 'string') &&
+    (t.dueTime === undefined || t.dueTime === null || typeof t.dueTime === 'string') &&
+    (t.history === undefined || isValidHistory(t.history)) &&
+    (t.completedAt === undefined ||
+      t.completedAt === null ||
+      typeof t.completedAt === 'string') &&
+    (t.archivedAt === undefined ||
+      t.archivedAt === null ||
+      typeof t.archivedAt === 'string') &&
+    (t.archiveReason === undefined ||
+      t.archiveReason === null ||
+      typeof t.archiveReason === 'string')
   )
 }
 
@@ -342,6 +341,8 @@ function App() {
   const [tasks, setTasks] = useState(initialState.tasks)
   const [storageAvailable] = useState(initialState.storageAvailable)
   const [searchQuery, setSearchQuery] = useState('')
+  const [tagFilterInput, setTagFilterInput] = useState('')
+  const [activeMoveTask, setActiveMoveTask] = useState(null)
   const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -419,6 +420,10 @@ function App() {
   }
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
+  const parsedTagFilter = tagFilterInput
+    .split(',')
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
 
   const activeTasks = useMemo(() => {
     const next = emptyTasks()
@@ -448,7 +453,7 @@ function App() {
       next[id] = filtered
     }
     return next
-  }, [activeTasks, hideCompleted, normalizedSearch, sortByDueDate])
+  }, [activeTasks, hideCompleted, normalizedSearch, parsedTagFilter, sortByDueDate])
 
   function handleAddTask(quadrantId: string, text: string, dueDate: string | null = null, dueTime: string | null = null): TaskResult {
     const cleanText = normalizeText(text)
@@ -514,8 +519,7 @@ function App() {
     return { ok: true }
   }
 
-  function handleMoveTask(sourceQuadrantId: string, taskId: string, targetQuadrantId: string): TaskResult {
-    if (sourceQuadrantId === targetQuadrantId) return { ok: true }
+  function handleStartTaskMove(sourceQuadrantId: string, taskId: string): TaskResult {
 
     const sourceTask = tasks[sourceQuadrantId].find(
       (task) => task.id === taskId && !isArchivedTask(task)
