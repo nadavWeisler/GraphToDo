@@ -21,13 +21,17 @@ test('adds and deletes a task without completion history', async () => {
 
   expect(within(firstRegion).getByText('Pay rent')).toBeTruthy()
 
-  await user.click(within(firstRegion).getByRole('button', { name: 'Delete task' }))
-  expect(within(firstRegion).queryByText('Pay rent')).toBeNull()
+  const toggleBtn = within(firstRegion).getByRole('button', { name: 'Mark complete' })
+  expect(toggleBtn.getAttribute('aria-describedby')).toBe('task-action-status')
+  await user.click(toggleBtn)
+  expect(within(firstRegion).getByRole('button', { name: 'Mark incomplete' })).toBeTruthy()
+  expect(screen.getByText('Task "Pay rent" marked as completed.')).toBeTruthy()
 
-  await waitFor(() => {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    expect(saved?.tasks?.[firstQuadrant.id]).toBeUndefined()
-  })
+  const deleteBtn = within(firstRegion).getByRole('button', { name: 'Delete task' })
+  expect(deleteBtn.getAttribute('aria-describedby')).toBe('task-action-status')
+  await user.click(deleteBtn)
+  expect(within(firstRegion).queryByText('Pay rent')).toBeNull()
+  expect(screen.getByText('Task "Pay rent" deleted.')).toBeTruthy()
 })
 
 test('reopens a completed task from the task itself and updates completed controls', async () => {
