@@ -78,6 +78,10 @@ test('moves a task between quadrants with drag and drop', async () => {
     within(firstRegion).getByRole('textbox', { name: `Add task to ${firstQuadrant.title}` }),
     'Plan sprint{enter}'
   )
+  await user.click(within(firstRegion).getByRole('button', { name: 'Mark complete' }))
+
+  const savedBeforeMove = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  const createdTask = savedBeforeMove.tasks[firstQuadrant.id][0]
 
   const task = within(firstRegion).getByText('Plan sprint').closest('li')
   const thirdRegion = getQuadrantByLabel(thirdQuadrant.title)
@@ -101,6 +105,14 @@ test('moves a task between quadrants with drag and drop', async () => {
 
   expect(within(firstRegion).queryByText('Plan sprint')).toBeNull()
   expect(within(thirdRegion).getByText('Plan sprint')).toBeTruthy()
+
+  await waitFor(() => {
+    const savedAfterMove = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    expect(
+      (savedAfterMove.tasks[firstQuadrant.id] ?? []).some((task) => task.id === createdTask.id)
+    ).toBe(false)
+    expect(savedAfterMove.tasks[thirdQuadrant.id]).toContainEqual(createdTask)
+  })
 })
 
 test('moves a task between quadrants with keyboard drag-and-drop controls', async () => {
