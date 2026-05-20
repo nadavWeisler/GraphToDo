@@ -119,37 +119,54 @@ function validateImportedTasksShape(data) {
   }
 
   const next = emptyTasks()
+  const errors = []
 
   for (const { id, legacyId } of QUADRANTS) {
     const dataKey = id in data ? id : legacyId in data ? legacyId : null
     if (!dataKey) {
-      throw new Error(`Missing required quadrant "${id}".`)
+      errors.push(`Missing required quadrant "${id}".`)
+      continue
     }
 
-    if (!Array.isArray(data[dataKey])) {
-      throw new Error(`Quadrant "${dataKey}" must be an array of tasks.`)
+    const quadrantTasks = data[dataKey]
+    if (!Array.isArray(quadrantTasks)) {
+      errors.push(`Quadrant "${dataKey}" must be an array of tasks.`)
+      continue
     }
 
     const sanitized = []
-    for (const [index, task] of data[dataKey].entries()) {
+    for (const [index, task] of quadrantTasks.entries()) {
+      const taskErrors = []
       if (!task || typeof task !== 'object' || Array.isArray(task)) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" must be an object.`)
+        errors.push(`Task ${index + 1} in "${dataKey}" must be an object.`)
+        continue
       }
 
       if (typeof task.id !== 'string' || !task.id.trim()) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "id" string.`)
+        taskErrors.push('missing a valid "id" string')
       }
 
       if (typeof task.text !== 'string') {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "text" string.`)
-      }
-
-      if (!normalizeText(task.text)) {
-        throw new Error(`Task ${index + 1} in "${dataKey}" must have non-empty "text".`)
+        taskErrors.push('missing a valid "text" string')
+      } else if (!normalizeText(task.text)) {
+        taskErrors.push('must have non-empty "text"')
       }
 
       if (typeof task.done !== 'boolean') {
-        throw new Error(`Task ${index + 1} in "${dataKey}" is missing a valid "done" boolean.`)
+        taskErrors.push('missing a valid "done" boolean')
+      }
+
+      if (task.dueDate !== undefined && task.dueDate !== null && typeof task.dueDate !== 'string') {
+        taskErrors.push('"dueDate" must be a string when provided')
+      }
+
+      if (task.dueTime !== undefined && task.dueTime !== null && typeof task.dueTime !== 'string') {
+        taskErrors.push('"dueTime" must be a string when provided')
+      }
+
+      if (taskErrors.length > 0) {
+        errors.push(`Task ${index + 1} in "${dataKey}" ${taskErrors.join(', ')}.`)
+        continue
       }
 
       const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
@@ -172,6 +189,10 @@ function validateImportedTasksShape(data) {
     }
 
     next[id] = deduped
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid JSON structure found. ${errors.join(' ')}`)
   }
 
   return next
