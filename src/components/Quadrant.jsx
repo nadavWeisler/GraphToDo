@@ -4,6 +4,17 @@ import './Quadrant.css'
 
 const TASK_DRAG_MIME_TYPE = 'application/x-graphtodo-task'
 
+function hasTaskDragMimeType(types) {
+  if (!types) return false
+  if (typeof types.includes === 'function') {
+    return types.includes(TASK_DRAG_MIME_TYPE)
+  }
+  if (typeof types.contains === 'function') {
+    return types.contains(TASK_DRAG_MIME_TYPE)
+  }
+  return Array.from(types).includes(TASK_DRAG_MIME_TYPE)
+}
+
 function Quadrant({
   id,
   title,
@@ -51,7 +62,7 @@ function Quadrant({
   }
 
   function handleDragOver(event) {
-    if (!event.dataTransfer.types.includes(TASK_DRAG_MIME_TYPE)) return
+    if (!hasTaskDragMimeType(event.dataTransfer?.types)) return
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
     if (!isDragOver) {

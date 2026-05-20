@@ -101,6 +101,12 @@ test('moves a task between quadrants with drag and drop', async () => {
 
   expect(within(firstRegion).queryByText('Plan sprint')).toBeNull()
   expect(within(thirdRegion).getByText('Plan sprint')).toBeTruthy()
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    expect((saved.tasks[firstQuadrant.id] ?? []).some((task) => task.text === 'Plan sprint')).toBe(false)
+    expect((saved.tasks[thirdQuadrant.id] ?? []).some((task) => task.text === 'Plan sprint')).toBe(true)
+  })
 })
 
 test('loads tasks from legacy storage keys and persists current quadrant ids', async () => {
@@ -371,13 +377,20 @@ test('drag-over applies visual feedback class on quadrant', async () => {
   const q2 = getQuadrantByLabel('Schedule')
 
   const dragData = new Map()
+  const dragTypes = {
+    contains(type) {
+      return dragData.has(type)
+    },
+    [Symbol.iterator]: function* () {
+      yield* dragData.keys()
+    },
+  }
   const dataTransfer = {
     dropEffect: 'none',
     effectAllowed: 'all',
-    types: [],
+    types: dragTypes,
     setData(type, value) {
       dragData.set(type, value)
-      this.types = [...dragData.keys()]
     },
     getData(type) {
       return dragData.get(type) ?? ''
