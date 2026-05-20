@@ -87,6 +87,29 @@
   color: #475569;
 }
 
+.sync-error {
+  max-width: 900px;
+  margin: 0 auto 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sync-error button {
+  border: 1px solid #fdba74;
+  border-radius: 6px;
+  background: #fff;
+  color: #9a3412;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+
 .storage-warning {
   max-width: 900px;
   margin: 0 auto 0.5rem;
