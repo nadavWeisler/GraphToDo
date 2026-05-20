@@ -18,6 +18,9 @@ function Quadrant({
   onDeleteTask,
   onEditTask,
   onMoveTask,
+  activeMoveTask,
+  onStartTaskMove,
+  onCancelTaskMove,
 }) {
   const [input, setInput] = useState('')
   const [addDueDate, setAddDueDate] = useState('')
@@ -25,6 +28,25 @@ function Quadrant({
   const [errorMessage, setErrorMessage] = useState('')
   const addInputRef = useRef(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const titleId = `quadrant-title-${id}`
+  const labelId = `quadrant-label-${id}`
+  const countId = `quadrant-count-${id}`
+  const instructionsId = `quadrant-instructions-${id}`
+
+  function getMovePayload(event) {
+    if (activeMoveTask) {
+      return activeMoveTask
+    }
+
+    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
+    if (!rawPayload) return null
+
+    try {
+      return JSON.parse(rawPayload)
+    } catch {
+      return null
+    }
+  }
 
   function handleAdd(event) {
     event.preventDefault()
@@ -43,6 +65,7 @@ function Quadrant({
   }
 
   function handleTaskDragStart(event, sourceQuadrantId, taskId) {
+    onStartTaskMove(sourceQuadrantId, taskId)
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData(
       TASK_DRAG_MIME_TYPE,
@@ -69,37 +92,67 @@ function Quadrant({
     event.preventDefault()
     setIsDragOver(false)
 
-    const rawPayload = event.dataTransfer.getData(TASK_DRAG_MIME_TYPE)
-    if (!rawPayload) return
-
-    try {
-      const { sourceQuadrantId, taskId } = JSON.parse(rawPayload)
-      const result = onMoveTask(sourceQuadrantId, taskId, id)
-
-      if (!result.ok) {
-        setErrorMessage(result.error)
-        return
-      }
-
-      setErrorMessage('')
-    } catch {
+    const payload = getMovePayload(event)
+    if (!payload) {
       setErrorMessage('Unable to move the dropped task.')
+      return
     }
+
+    const result = onMoveTask(payload.sourceQuadrantId, payload.taskId, id)
+    if (!result.ok) {
+      setErrorMessage(result.error)
+      return
+    }
+
+    setErrorMessage('')
+  }
+
+  function handleKeyboardDrop(event) {
+    if (event.target !== event.currentTarget || !activeMoveTask) return
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onCancelTaskMove()
+      setIsDragOver(false)
+      setErrorMessage('')
+      return
+    }
+
+    if (event.key !== 'Enter' && event.key !== ' ') return
+
+    event.preventDefault()
+    const result = onMoveTask(activeMoveTask.sourceQuadrantId, activeMoveTask.taskId, id)
+    if (!result.ok) {
+      setErrorMessage(result.error)
+      return
+    }
+
+    setErrorMessage('')
   }
 
   return (
     <section
       className={`quadrant ${colorClass}${isDragOver ? ' drag-over' : ''}`}
-      aria-label={`${title} quadrant`}
+      role="region"
+      aria-labelledby={`${titleId} ${labelId}`}
+      aria-describedby={`${countId} ${instructionsId}${errorMessage ? ` error-${id}` : ''}`}
+      tabIndex={0}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onKeyDown={handleKeyboardDrop}
     >
       <div className="quadrant-header">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
+        <span className="sr-only" id={labelId}>quadrant</span>
         <p>{subtitle}</p>
-        <p className="count-text" aria-live="polite">
+        <p className="count-text" id={countId} aria-live="polite">
           {totalCount} total{visibleCount !== totalCount ? ` • ${visibleCount} shown` : ''}
+        </p>
+        <p className="sr-only" id={instructionsId}>
+          {activeMoveTask
+            ? 'Press Enter or Space to drop the selected task in this quadrant. Press Escape to cancel the move.'
+            : 'Drag a task into this quadrant or focus a task card, press Enter or Space to pick it up, then focus this quadrant and press Enter or Space to drop it.'}
         </p>
       </div>
 
@@ -115,7 +168,15 @@ function Quadrant({
             onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
             onDragStart={handleTaskDragStart}
-            onDragEnd={() => setIsDragOver(false)}
+            onDragEnd={(event) => {
+              setIsDragOver(false)
+              if (event.dataTransfer?.dropEffect === 'none') {
+                onCancelTaskMove()
+              }
+            }}
+            activeMoveTask={activeMoveTask}
+            onStartTaskMove={onStartTaskMove}
+            onCancelTaskMove={onCancelTaskMove}
           />
         ))}
       </ul>

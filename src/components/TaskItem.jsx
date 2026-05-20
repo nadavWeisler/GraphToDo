@@ -31,6 +31,9 @@ function TaskItem({
   onMove,
   onDragStart,
   onDragEnd,
+  activeMoveTask,
+  onStartTaskMove,
+  onCancelTaskMove,
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [draftText, setDraftText] = useState(task.text)
@@ -40,6 +43,10 @@ function TaskItem({
   const editInputRef = useRef(null)
   const editButtonRef = useRef(null)
   const shouldRestoreFocusRef = useRef(false)
+  const isMoveActive =
+    activeMoveTask?.sourceQuadrantId === currentQuadrantId && activeMoveTask?.taskId === task.id
+  const instructionsId = `task-move-instructions-${task.id}`
+  const errorId = `task-error-${task.id}`
 
   useEffect(() => {
     if (isEditing) {
@@ -86,6 +93,35 @@ function TaskItem({
     setErrorMessage('')
   }
 
+  function handleKeyboardMove(event) {
+    if (event.target !== event.currentTarget || isEditing) return
+
+    if (event.key === 'Escape' && isMoveActive) {
+      event.preventDefault()
+      onCancelTaskMove()
+      setErrorMessage('')
+      return
+    }
+
+    if (event.key !== 'Enter' && event.key !== ' ') return
+
+    event.preventDefault()
+
+    if (isMoveActive) {
+      onCancelTaskMove()
+      setErrorMessage('')
+      return
+    }
+
+    const result = onStartTaskMove(currentQuadrantId, task.id)
+    if (!result.ok) {
+      setErrorMessage(result.error)
+      return
+    }
+
+    setErrorMessage('')
+  }
+
   const dueDateInfo = formatDueDateLabel(task.dueDate, task.dueTime)
   const ariaLabelSuffix =
     dueDateInfo?.urgency === 'overdue'
@@ -96,11 +132,20 @@ function TaskItem({
 
   return (
     <li
-      className={`task-item${task.done ? ' done' : ''}`}
+      className={`task-item${task.done ? ' done' : ''}${isMoveActive ? ' task-item-picked-up' : ''}`}
       draggable={!isEditing}
       onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
       onDragEnd={onDragEnd}
+      onKeyDown={handleKeyboardMove}
+      tabIndex={isEditing ? -1 : 0}
+      aria-describedby={`${instructionsId} ${errorId}`}
+      aria-keyshortcuts="Enter Space Escape"
     >
+      <span className="sr-only" id={instructionsId}>
+        {isMoveActive
+          ? `Task ${task.text} is ready to move. Focus a quadrant and press Enter or Space to drop it, or press Escape to cancel.`
+          : `Task ${task.text}. Press Enter or Space to pick it up and move it to another quadrant.`}
+      </span>
       <button
         className="toggle-btn"
         onClick={onToggle}
@@ -209,7 +254,7 @@ function TaskItem({
         ×
       </button>
 
-      <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
+      <p className="item-error" id={errorId} role="status" aria-live="polite">{errorMessage}</p>
     </li>
   )
 }

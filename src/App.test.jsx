@@ -103,6 +103,35 @@ test('moves a task between quadrants with drag and drop', async () => {
   expect(within(thirdRegion).getByText('Plan sprint')).toBeTruthy()
 })
 
+test('moves a task between quadrants with keyboard drag-and-drop controls', async () => {
+  const [firstQuadrant, , thirdQuadrant] = QUADRANTS
+  const user = userEvent.setup()
+  render(<App />)
+
+  const firstRegion = getQuadrantByLabel(firstQuadrant.title)
+  await user.type(
+    within(firstRegion).getByRole('textbox', { name: `Add task to ${firstQuadrant.title}` }),
+    'Prepare retrospective{enter}'
+  )
+
+  const task = within(firstRegion).getByText('Prepare retrospective').closest('li')
+  task.focus()
+  fireEvent.keyDown(task, { key: ' ', code: 'Space' })
+
+  expect(
+    screen.getByText(
+      'Picked up "Prepare retrospective". Focus a quadrant and press Enter or Space to drop it.'
+    )
+  ).toBeTruthy()
+
+  const thirdRegion = getQuadrantByLabel(thirdQuadrant.title)
+  thirdRegion.focus()
+  fireEvent.keyDown(thirdRegion, { key: 'Enter', code: 'Enter' })
+
+  expect(within(firstRegion).queryByText('Prepare retrospective')).toBeNull()
+  expect(within(thirdRegion).getByText('Prepare retrospective')).toBeTruthy()
+})
+
 test('loads tasks from legacy storage keys and persists current quadrant ids', async () => {
   const [firstQuadrant, secondQuadrant] = QUADRANTS
   const user = userEvent.setup()
