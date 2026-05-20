@@ -24,8 +24,8 @@ function normalizeText(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-function createTask(text, dueDate = null, dueTime = null) {
-  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime }
+function createTask(text, dueDate = null, dueTime = null, tags = []) {
+  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime, tags }
 }
 
 function isValidTask(task) {
@@ -35,7 +35,8 @@ function isValidTask(task) {
     typeof task.text === 'string' &&
     typeof task.done === 'boolean' &&
     (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
-    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string')
+    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string') &&
+    (task.tags === undefined || Array.isArray(task.tags))
   )
 }
 
@@ -48,6 +49,7 @@ function sanitizeTask(task) {
     done: task.done,
     dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
     dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+    tags: Array.isArray(task.tags) ? task.tags.filter((t) => typeof t === 'string') : [],
   }
 }
 
@@ -159,6 +161,7 @@ function validateImportedTasksShape(data) {
         id: task.id.trim(),
         dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
         dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+        tags: Array.isArray(task.tags) ? task.tags.filter((t) => typeof t === 'string') : [],
       })
     }
 
@@ -219,6 +222,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
+  const [tagFilterInput, setTagFilterInput] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const importInputRef = useRef(null)
 
@@ -250,12 +254,20 @@ function App() {
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
   const visibleTasks = useMemo(() => {
+    const parsedTagFilter = tagFilterInput
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
     const next = emptyTasks()
     for (const { id } of QUADRANTS) {
       let filtered = tasks[id].filter((task) => {
         if (hideCompleted && task.done) return false
-        if (!normalizedSearch) return true
-        return task.text.toLowerCase().includes(normalizedSearch)
+        if (normalizedSearch && !task.text.toLowerCase().includes(normalizedSearch)) return false
+        if (parsedTagFilter.length > 0) {
+          const taskTags = (task.tags ?? []).map((t) => t.toLowerCase())
+          if (!parsedTagFilter.every((ft) => taskTags.includes(ft))) return false
+        }
+        return true
       })
       if (sortByDueDate) {
         filtered = [...filtered].sort(
@@ -265,9 +277,9 @@ function App() {
       next[id] = filtered
     }
     return next
-  }, [hideCompleted, normalizedSearch, sortByDueDate, tasks])
+  }, [hideCompleted, normalizedSearch, sortByDueDate, tagFilterInput, tasks])
 
-  function handleAddTask(quadrantId, text, dueDate = null, dueTime = null) {
+  function handleAddTask(quadrantId, text, dueDate = null, dueTime = null, tags = []) {
     const cleanText = normalizeText(text)
 
     if (!cleanText) {
@@ -284,7 +296,7 @@ function App() {
 
     updateTasks((prev) => ({
       ...prev,
-      [quadrantId]: [...prev[quadrantId], createTask(cleanText, dueDate || null, dueTime || null)],
+      [quadrantId]: [...prev[quadrantId], createTask(cleanText, dueDate || null, dueTime || null, tags)],
     }))
 
     return { ok: true }
@@ -306,7 +318,7 @@ function App() {
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null) {
+  function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null, tags = []) {
     const cleanText = normalizeText(nextText)
 
     if (!cleanText) {
@@ -325,7 +337,7 @@ function App() {
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
         task.id === taskId
-          ? { ...task, text: cleanText, dueDate: dueDate || null, dueTime: dueTime || null }
+          ? { ...task, text: cleanText, dueDate: dueDate || null, dueTime: dueTime || null, tags }
           : task
       ),
     }))
@@ -434,6 +446,17 @@ function App() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search tasks..."
+          />
+        </label>
+
+        <label className="toolbar-field" htmlFor="tag-filter">
+          <span>Filter by tags</span>
+          <input
+            id="tag-filter"
+            type="search"
+            value={tagFilterInput}
+            onChange={(event) => setTagFilterInput(event.target.value)}
+            placeholder="tag1, tag2…"
           />
         </label>
 

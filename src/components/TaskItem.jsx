@@ -36,6 +36,7 @@ function TaskItem({
   const [draftText, setDraftText] = useState(task.text)
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
   const [draftDueTime, setDraftDueTime] = useState(task.dueTime ?? '')
+  const [draftTags, setDraftTags] = useState((task.tags ?? []).join(', '))
   const [errorMessage, setErrorMessage] = useState('')
   const editInputRef = useRef(null)
   const editButtonRef = useRef(null)
@@ -55,7 +56,11 @@ function TaskItem({
 
   function handleSave(event) {
     event.preventDefault()
-    const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null })
+    const tags = draftTags
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+    const result = onSave({ text: draftText, dueDate: draftDueDate || null, dueTime: draftDueTime || null, tags })
     if (!result.ok) {
       setErrorMessage(result.error)
       return
@@ -81,6 +86,7 @@ function TaskItem({
     setDraftText(task.text)
     setDraftDueDate(task.dueDate ?? '')
     setDraftDueTime(task.dueTime ?? '')
+    setDraftTags((task.tags ?? []).join(', '))
     shouldRestoreFocusRef.current = true
     setIsEditing(false)
     setErrorMessage('')
@@ -153,6 +159,18 @@ function TaskItem({
               disabled={!draftDueDate}
             />
           </div>
+          <div className="edit-row">
+            <label className="sr-only" htmlFor={`edit-tags-${task.id}`}>Tags (comma-separated)</label>
+            <input
+              id={`edit-tags-${task.id}`}
+              className="task-tags-input"
+              type="text"
+              value={draftTags}
+              onChange={(event) => setDraftTags(event.target.value)}
+              placeholder="tag1, tag2…"
+              aria-label="Tags (comma-separated)"
+            />
+          </div>
         </form>
       ) : task.done ? (
         <button
@@ -173,6 +191,13 @@ function TaskItem({
             >
               📅 {dueDateInfo.label}
             </span>
+          )}
+          {task.tags && task.tags.length > 0 && (
+            <div className="task-tags" aria-label="Tags">
+              {task.tags.map((tag) => (
+                <span key={tag} className="tag-chip">{tag}</span>
+              ))}
+            </div>
           )}
         </div>
       )}
