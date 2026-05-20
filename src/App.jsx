@@ -211,6 +211,7 @@ function App() {
   const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
   const [sortByDueDate, setSortByDueDate] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [activeMoveTask, setActiveMoveTask] = useState(null)
   const importInputRef = useRef(null)
 
   function persistState(nextTasks, nextHideCompleted = hideCompleted) {
@@ -321,11 +322,44 @@ function App() {
     return { ok: true }
   }
 
-  function handleMoveTask(sourceQuadrantId, taskId, targetQuadrantId) {
-    if (sourceQuadrantId === targetQuadrantId) return { ok: true }
+  function handleStartTaskMove(sourceQuadrantId, taskId) {
+    const sourceQuadrantTasks = tasks[sourceQuadrantId]
+    if (!sourceQuadrantTasks) {
+      return { ok: false, error: 'Source quadrant not found.' }
+    }
 
-    const sourceTask = tasks[sourceQuadrantId].find((task) => task.id === taskId)
+    const sourceTask = sourceQuadrantTasks.find((task) => task.id === taskId)
     if (!sourceTask) return { ok: false, error: 'Task not found.' }
+
+    setActiveMoveTask({ sourceQuadrantId, taskId })
+    setStatusMessage(
+      `Picked up "${sourceTask.text}". Focus a quadrant and press Enter or Space to drop it.`
+    )
+
+    return { ok: true }
+  }
+
+  function handleCancelTaskMove(message = 'Task move cancelled.') {
+    setActiveMoveTask(null)
+    setStatusMessage(message)
+  }
+
+  function handleMoveTask(sourceQuadrantId, taskId, targetQuadrantId) {
+    const sourceQuadrantTasks = tasks[sourceQuadrantId]
+    const targetQuadrantTasks = tasks[targetQuadrantId]
+
+    if (!sourceQuadrantTasks || !targetQuadrantTasks) {
+      return { ok: false, error: 'Target quadrant not found.' }
+    }
+
+    const sourceTask = sourceQuadrantTasks.find((task) => task.id === taskId)
+    if (!sourceTask) return { ok: false, error: 'Task not found.' }
+
+    if (sourceQuadrantId === targetQuadrantId) {
+      setActiveMoveTask(null)
+      setStatusMessage(`Dropped "${sourceTask.text}" back into ${QUADRANTS.find((q) => q.id === targetQuadrantId)?.title ?? 'the current quadrant'}.`)
+      return { ok: true }
+    }
 
     if (isDuplicate(tasks, targetQuadrantId, sourceTask.text)) {
       return { ok: false, error: 'A similar task already exists in the target quadrant.' }
@@ -336,6 +370,11 @@ function App() {
       [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
       [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
     }))
+
+    setActiveMoveTask(null)
+    setStatusMessage(
+      `Moved "${sourceTask.text}" to ${QUADRANTS.find((quadrant) => quadrant.id === targetQuadrantId)?.title ?? 'the selected quadrant'}.`
+    )
 
     return { ok: true }
   }
@@ -512,6 +551,9 @@ function App() {
               onDeleteTask={handleDeleteTask}
               onEditTask={handleEditTask}
               onMoveTask={handleMoveTask}
+              activeMoveTask={activeMoveTask}
+              onStartTaskMove={handleStartTaskMove}
+              onCancelTaskMove={handleCancelTaskMove}
             />
           ))}
         </div>
