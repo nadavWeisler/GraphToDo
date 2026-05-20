@@ -13,6 +13,7 @@ function Quadrant({
   totalCount,
   visibleCount,
   quadrants,
+  announcementId,
   onAddTask,
   onToggleTask,
   onDeleteTask,
@@ -109,6 +110,7 @@ function Quadrant({
             key={task.id}
             task={task}
             quadrants={quadrants}
+            announcementId={announcementId}
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}

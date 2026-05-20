@@ -24,6 +24,7 @@ function formatDueDateLabel(dueDate, dueTime) {
 function TaskItem({
   task,
   quadrants,
+  announcementId,
   currentQuadrantId,
   onToggle,
   onDelete,
@@ -105,6 +106,7 @@ function TaskItem({
         className="toggle-btn"
         onClick={onToggle}
         aria-label={task.done ? 'Mark incomplete' : 'Mark complete'}
+        aria-describedby={announcementId}
       >
         <span className="checkmark" aria-hidden="true">{task.done ? '✓' : ''}</span>
       </button>
@@ -160,6 +162,7 @@ function TaskItem({
           className="task-text task-text-btn"
           onClick={onToggle}
           aria-label={`Reopen task: ${task.text}`}
+          aria-describedby={announcementId}
         >
           {task.text}
         </button>
@@ -205,7 +208,12 @@ function TaskItem({
         </>
       ) : null}
 
-      <button className="delete-btn" onClick={onDelete} aria-label="Delete task">
+      <button
+        className="delete-btn"
+        onClick={onDelete}
+        aria-label="Delete task"
+        aria-describedby={announcementId}
+      >
         ×
       </button>
 

@@ -4,6 +4,7 @@ import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
+const TASK_ACTION_STATUS_ID = 'task-action-status'
 
 function emptyTasks() {
   return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
@@ -291,19 +292,27 @@ function App() {
   }
 
   function handleToggleTask(quadrantId, taskId) {
+    const task = tasks[quadrantId].find((item) => item.id === taskId)
     updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((t) =>
         t.id === taskId ? { ...t, done: !t.done } : t
       ),
     }))
+    if (task) {
+      setStatusMessage(`Task "${task.text}" marked as ${task.done ? 'incomplete' : 'completed'}.`)
+    }
   }
 
   function handleDeleteTask(quadrantId, taskId) {
+    const task = tasks[quadrantId].find((item) => item.id === taskId)
     updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].filter((t) => t.id !== taskId),
     }))
+    if (task) {
+      setStatusMessage(`Task "${task.text}" deleted.`)
+    }
   }
 
   function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null) {
@@ -493,7 +502,13 @@ function App() {
         </p>
       )}
 
-      <p className="status-message" role="status" aria-live="polite">
+      <p
+        id={TASK_ACTION_STATUS_ID}
+        className="status-message"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {statusMessage}
       </p>
 
@@ -519,6 +534,7 @@ function App() {
               totalCount={tasks[q.id].length}
               visibleCount={visibleTasks[q.id].length}
               quadrants={QUADRANTS}
+              announcementId={TASK_ACTION_STATUS_ID}
               onAddTask={handleAddTask}
               onToggleTask={handleToggleTask}
               onDeleteTask={handleDeleteTask}
