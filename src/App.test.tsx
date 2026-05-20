@@ -255,6 +255,56 @@ test('archives completed tasks when clearing them from the active view', async (
   })
 })
 
+test('optimistically updates task deletion, rolls back on save failure, and retries', async () => {
+  const user = userEvent.setup()
+  const firstQuadrant = QUADRANTS[0]
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        [firstQuadrant.id]: [
+          { id: 'task-a', text: 'Rollback me', done: false },
+          { id: 'task-b', text: 'Keep me', done: false },
+        ],
+        ...Object.fromEntries(QUADRANTS.slice(1).map((quadrant) => [quadrant.id, []])),
+      },
+    })
+  )
+
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Rollback me')).toBeTruthy()
+
+  const originalSetItem = Storage.prototype.setItem
+  let shouldFail = true
+  const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (...args) {
+    if (shouldFail) {
+      shouldFail = false
+      throw new Error('storage write failed')
+    }
+    return originalSetItem.call(this, ...args)
+  })
+
+  try {
+    await user.click(within(q1).getAllByRole('button', { name: 'Delete task' })[0])
+
+    await waitFor(() => {
+      expect(within(q1).getByText('Rollback me')).toBeTruthy()
+      expect(screen.getByText('Could not sync delete task.')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Retry delete task' })).toBeTruthy()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Retry delete task' }))
+
+    await waitFor(() => {
+      expect(within(q1).queryByText('Rollback me')).toBeNull()
+    })
+  } finally {
+    setItemSpy.mockRestore()
+  }
+})
+
 test('persists config flags alongside tasks in state.v2 format', async () => {
   const user = userEvent.setup()
   render(<App />)

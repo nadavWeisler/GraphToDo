@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Quadrant from './components/Quadrant'
 import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
@@ -338,36 +338,83 @@ function loadState() {
 }
 
 function App() {
-  const [initialState] = useState<AppState>(loadState)
-  const [tasks, setTasks] = useState<TasksState>(initialState.tasks)
-  const [storageAvailable, setStorageAvailable] = useState<boolean>(
-    initialState.storageAvailable
-  )
-  const [searchQuery, setSearchQuery] = useState<string>('')
-  const [hideCompleted, setHideCompleted] = useState<boolean>(initialState.config.hideCompleted)
-  const [sortByDueDate, setSortByDueDate] = useState<boolean>(false)
-  const [statusMessage, setStatusMessage] = useState<string>('')
-  const importInputRef = useRef<HTMLInputElement>(null)
+  const [initialState] = useState(loadState)
+  const [tasks, setTasks] = useState(initialState.tasks)
+  const [storageAvailable] = useState(initialState.storageAvailable)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [hideCompleted, setHideCompleted] = useState(initialState.config.hideCompleted)
+  const [sortByDueDate, setSortByDueDate] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+  const [failedSyncAction, setFailedSyncAction] = useState(null)
+  const importInputRef = useRef(null)
+  const optimisticTaskVersionRef = useRef(0)
+  const optimisticConfigVersionRef = useRef(0)
+  const tasksRef = useRef(tasks)
+  const hideCompletedRef = useRef(hideCompleted)
 
-  function persistState(nextTasks: TasksState, nextHideCompleted: boolean = hideCompleted): void {
-    if (!storageAvailable) return
+  useEffect(() => {
+    tasksRef.current = tasks
+  }, [tasks])
+
+  useEffect(() => {
+    hideCompletedRef.current = hideCompleted
+  }, [hideCompleted])
+
+  function persistState(nextTasks, nextHideCompleted = hideCompletedRef.current) {
+    if (!storageAvailable) return { ok: true }
     try {
       const compacted = compactTasks(nextTasks)
       if (Object.keys(compacted).length === 0) {
-        stateService.remove(STORAGE_KEY)
-        return
+        localStorage.removeItem(STORAGE_KEY)
+        return { ok: true }
       }
-      stateService.set(STORAGE_KEY, { tasks: compacted, config: { hideCompleted: nextHideCompleted } })
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks: compacted, config: { hideCompleted: nextHideCompleted } })
+      )
+      return { ok: true }
     } catch {
-      setStorageAvailable(false)
+      return { ok: false }
     }
   }
 
-  function updateTasks(nextOrUpdater: TasksState | ((prev: TasksState) => TasksState)): void {
-    setTasks((prev) => {
-      const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(prev) : nextOrUpdater
-      persistState(next)
-      return next
+  function applyOptimisticTaskUpdate(nextOrUpdater, operationLabel) {
+    const previous = tasksRef.current
+    const next = typeof nextOrUpdater === 'function' ? nextOrUpdater(previous) : nextOrUpdater
+    const version = optimisticTaskVersionRef.current + 1
+    optimisticTaskVersionRef.current = version
+    setTasks(next)
+    setFailedSyncAction(null)
+    queueMicrotask(() => {
+      const persistResult = persistState(next)
+      if (persistResult.ok || optimisticTaskVersionRef.current !== version) return
+
+      setTasks(previous)
+      setStatusMessage(`Failed to save ${operationLabel}. Reverted. Retry to try again.`)
+      setFailedSyncAction({
+        operationLabel,
+        retry: () => applyOptimisticTaskUpdate(nextOrUpdater, operationLabel),
+      })
+    })
+    return { ok: true }
+  }
+
+  function applyOptimisticHideCompleted(nextHideCompleted) {
+    const previousHideCompleted = hideCompletedRef.current
+    const version = optimisticConfigVersionRef.current + 1
+    optimisticConfigVersionRef.current = version
+    setHideCompleted(nextHideCompleted)
+    setFailedSyncAction(null)
+    queueMicrotask(() => {
+      const persistResult = persistState(tasksRef.current, nextHideCompleted)
+      if (persistResult.ok || optimisticConfigVersionRef.current !== version) return
+
+      setHideCompleted(previousHideCompleted)
+      setStatusMessage('Failed to save preferences. Reverted. Retry to try again.')
+      setFailedSyncAction({
+        operationLabel: 'preferences',
+        retry: () => applyOptimisticHideCompleted(nextHideCompleted),
+      })
     })
   }
 
@@ -418,37 +465,27 @@ function App() {
       return { ok: false, error: 'A similar task already exists in this quadrant.' }
     }
 
-    updateTasks((prev) => ({
+    applyOptimisticTaskUpdate((prev) => ({
       ...prev,
-      [quadrantId]: [...prev[quadrantId], createTask(cleanText, dueDate || null, dueTime || null, tags)],
-    }))
-
+      [quadrantId]: [...prev[quadrantId], createTask(cleanText, dueDate || null, dueTime || null)],
+    }), 'new task')
     return { ok: true }
   }
 
-  function handleToggleTask(quadrantId: string, taskId: string): void {
-    updateTasks((prev) => ({
+  function handleToggleTask(quadrantId, taskId) {
+    applyOptimisticTaskUpdate((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((t) =>
         t.id === taskId ? (t.done ? markTaskIncomplete(t) : markTaskComplete(t)) : t
       ),
-    }))
+    }), 'task status')
   }
 
   function handleDeleteTask(quadrantId, taskId) {
-    updateTasks((prev) => {
-      const task = prev[quadrantId].find((entry) => entry.id === taskId)
-      if (!task) return prev
-
-      return {
-        ...prev,
-        [quadrantId]: task.history.completedAt
-          ? prev[quadrantId].map((entry) =>
-              entry.id === taskId ? archiveTask(entry, 'deleted') : entry
-            )
-          : prev[quadrantId].filter((entry) => entry.id !== taskId),
-      }
-    })
+    applyOptimisticTaskUpdate((prev) => ({
+      ...prev,
+      [quadrantId]: prev[quadrantId].filter((t) => t.id !== taskId),
+    }), 'delete task')
   }
 
   function handleEditTask(quadrantId: string, taskId: string, nextText: string, dueDate: string | null = null, dueTime: string | null = null): TaskResult {
@@ -466,15 +503,14 @@ function App() {
       return { ok: false, error: 'A similar task already exists in this quadrant.' }
     }
 
-    updateTasks((prev) => ({
+    applyOptimisticTaskUpdate((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
         task.id === taskId
           ? { ...task, text: cleanText, dueDate: dueDate || null, dueTime: dueTime || null, tags }
           : task
       ),
-    }))
-
+    }), 'task edits')
     return { ok: true }
   }
 
@@ -520,22 +556,16 @@ function App() {
       return { ok: false, error: 'A similar task already exists in the target quadrant.' }
     }
 
-    updateTasks((prev) => ({
+    applyOptimisticTaskUpdate((prev) => ({
       ...prev,
       [sourceQuadrantId]: prev[sourceQuadrantId].filter((task) => task.id !== taskId),
       [targetQuadrantId]: [...prev[targetQuadrantId], sourceTask],
-    }))
-
-    setActiveMoveTask(null)
-    setStatusMessage(
-      `Moved "${sourceTask.text}" to ${QUADRANTS.find((quadrant) => quadrant.id === targetQuadrantId)?.title ?? 'the selected quadrant'}.`
-    )
-
+    }), 'task move')
     return { ok: true }
   }
 
-  function handleClearCompleted(): void {
-    updateTasks((prev) => {
+  function handleClearCompleted() {
+    applyOptimisticTaskUpdate((prev) => {
       const next = emptyTasks()
 
       for (const id of QUADRANT_IDS) {
@@ -545,7 +575,7 @@ function App() {
       }
 
       return next
-    })
+    }, 'clearing completed tasks')
     setStatusMessage('Completed tasks cleared.')
   }
 
@@ -577,7 +607,7 @@ function App() {
       const parsed = JSON.parse(text) as Record<string, unknown>
       const imported = validateImportedTasksShape((parsed.tasks ?? parsed) as unknown)
 
-      updateTasks(imported)
+      applyOptimisticTaskUpdate(imported, 'imported tasks')
       setStatusMessage('Tasks imported successfully.')
     } catch (error) {
       if (error instanceof SyntaxError) {
@@ -638,9 +668,7 @@ function App() {
             type="checkbox"
             checked={hideCompleted}
             onChange={(event) => {
-              const nextHideCompleted = event.target.checked
-              setHideCompleted(nextHideCompleted)
-              persistState(tasks, nextHideCompleted)
+              applyOptimisticHideCompleted(event.target.checked)
             }}
           />
           <span>Hide completed</span>
@@ -691,6 +719,18 @@ function App() {
       <p className="status-message" role="status" aria-live="polite">
         {statusMessage}
       </p>
+
+      {failedSyncAction && (
+        <div className="sync-error" role="alert">
+          <span>Could not sync {failedSyncAction.operationLabel}.</span>
+          <button
+            type="button"
+            onClick={() => failedSyncAction.retry()}
+          >
+            Retry {failedSyncAction.operationLabel}
+          </button>
+        </div>
+      )}
 
       <div className="matrix-labels" aria-hidden="true">
         <span className="axis-label urgent-label">← Urgent</span>
