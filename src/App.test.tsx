@@ -8,7 +8,7 @@ function getQuadrantByLabel(label: string): HTMLElement {
   return screen.getByRole('region', { name: `${label} quadrant` })
 }
 
-test('adds, toggles, and deletes a task', async () => {
+test('adds and deletes a task without completion history', async () => {
   const firstQuadrant = QUADRANTS[0]
   const user = userEvent.setup()
   render(<App />)
@@ -21,12 +21,13 @@ test('adds, toggles, and deletes a task', async () => {
 
   expect(within(firstRegion).getByText('Pay rent')).toBeTruthy()
 
-  const toggleBtn = within(firstRegion).getByRole('button', { name: 'Mark complete' })
-  await user.click(toggleBtn)
-  expect(within(firstRegion).getByRole('button', { name: 'Mark incomplete' })).toBeTruthy()
-
   await user.click(within(firstRegion).getByRole('button', { name: 'Delete task' }))
   expect(within(firstRegion).queryByText('Pay rent')).toBeNull()
+
+  await waitFor(() => {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    expect(saved?.tasks?.[firstQuadrant.id]).toBeUndefined()
+  })
 })
 
 test('reopens a completed task from the task itself and updates completed controls', async () => {
@@ -41,12 +42,39 @@ test('reopens a completed task from the task itself and updates completed contro
 
   await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
   expect(clearCompletedButton.disabled).toBe(false)
+  const completedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
 
   await user.click(within(q1).getByRole('button', { name: 'Reopen task: Pay rent' }))
 
   expect(within(q1).getByRole('button', { name: 'Mark complete' })).toBeTruthy()
   expect(within(q1).queryByRole('button', { name: 'Mark incomplete' })).toBeNull()
   expect(clearCompletedButton.disabled).toBe(true)
+
+  const reopenedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
+  expect(reopenedTask.done).toBe(false)
+  expect(reopenedTask.history.completedAt).toBe(completedTask.history.completedAt)
+  expect(reopenedTask.history.archivedAt).toBeNull()
+})
+
+test('archives deleted tasks that were previously completed', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Archive me{enter}')
+  await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
+
+  const completedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
+  await user.click(within(q1).getByRole('button', { name: 'Delete task' }))
+
+  expect(within(q1).queryByText('Archive me')).toBeNull()
+
+  await waitFor(() => {
+    const archivedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
+    expect(archivedTask.history.completedAt).toBe(completedTask.history.completedAt)
+    expect(typeof archivedTask.history.archivedAt).toBe('string')
+    expect(archivedTask.history.archiveReason).toBe('deleted')
+  })
 })
 
 test('moves a task between quadrants', async () => {
@@ -197,21 +225,33 @@ test('removes emptied quadrants from persisted storage', async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) as string) as { tasks: Record<string, unknown> }
     expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
-    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null, tags: [] }])
+    expect(saved.tasks[secondQuadrant.id]).toEqual([{
+      id: 'task-2',
+      text: 'Keep me',
+      done: false,
+      dueDate: null,
+      dueTime: null,
+      history: { completedAt: null, archivedAt: null, archiveReason: null },
+    }])
   })
 })
 
-test('clears storage key when all tasks are removed', async () => {
+test('archives completed tasks when clearing them from the active view', async () => {
   const user = userEvent.setup()
   render(<App />)
 
   const q1 = getQuadrantByLabel('Do First')
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Finish report{enter}')
   await user.click(within(q1).getByRole('button', { name: 'Mark complete' }))
+  const completedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
   await user.click(screen.getByRole('button', { name: 'Clear completed' }))
 
   await waitFor(() => {
-    expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    expect(within(q1).queryByText('Finish report')).toBeNull()
+    const archivedTask = JSON.parse(localStorage.getItem(STORAGE_KEY)).tasks[QUADRANTS[0].id][0]
+    expect(archivedTask.history.completedAt).toBe(completedTask.history.completedAt)
+    expect(typeof archivedTask.history.archivedAt).toBe('string')
+    expect(archivedTask.history.archiveReason).toBe('cleared-completed')
   })
 })
 

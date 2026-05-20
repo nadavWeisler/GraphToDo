@@ -26,19 +26,117 @@ function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-function createTask(text: string, dueDate: string | null = null, dueTime: string | null = null): Task {
-  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime }
+function createTask(text, dueDate = null, dueTime = null) {
+  return {
+    id: crypto.randomUUID(),
+    text,
+    done: false,
+    dueDate,
+    dueTime,
+    history: {
+      completedAt: null,
+      archivedAt: null,
+      archiveReason: null,
+    },
+  }
+}
+
+function isValidHistory(history) {
+  return (
+    history &&
+    typeof history === 'object' &&
+    !Array.isArray(history) &&
+    (history.completedAt === undefined ||
+      history.completedAt === null ||
+      typeof history.completedAt === 'string') &&
+    (history.archivedAt === undefined ||
+      history.archivedAt === null ||
+      typeof history.archivedAt === 'string') &&
+    (history.archiveReason === undefined ||
+      history.archiveReason === null ||
+      typeof history.archiveReason === 'string')
+  )
+}
+
+function sanitizeTaskHistory(task) {
+  const history = isValidHistory(task.history) ? task.history : {}
+
+  return {
+    completedAt:
+      typeof history.completedAt === 'string'
+        ? history.completedAt
+        : typeof task.completedAt === 'string'
+          ? task.completedAt
+          : null,
+    archivedAt:
+      typeof history.archivedAt === 'string'
+        ? history.archivedAt
+        : typeof task.archivedAt === 'string'
+          ? task.archivedAt
+          : null,
+    archiveReason:
+      typeof history.archiveReason === 'string'
+        ? history.archiveReason
+        : typeof task.archiveReason === 'string'
+          ? task.archiveReason
+          : null,
+  }
+}
+
+function isArchivedTask(task) {
+  return Boolean(task?.history?.archivedAt)
+}
+
+function markTaskComplete(task, completedAt = new Date().toISOString()) {
+  return {
+    ...task,
+    done: true,
+    history: {
+      ...task.history,
+      completedAt: task.history.completedAt ?? completedAt,
+    },
+  }
+}
+
+function markTaskIncomplete(task) {
+  return {
+    ...task,
+    done: false,
+  }
+}
+
+function archiveTask(task, archiveReason, archivedAt = new Date().toISOString()) {
+  return {
+    ...task,
+    history: {
+      ...task.history,
+      completedAt: task.history.completedAt ?? (task.done ? archivedAt : null),
+      archivedAt: task.history.archivedAt ?? archivedAt,
+      archiveReason: task.history.archiveReason ?? archiveReason,
+    },
+  }
 }
 
 function isValidTask(task: unknown): task is Task {
   if (!task || typeof task !== 'object' || Array.isArray(task)) return false
   const t = task as Record<string, unknown>
   return (
-    typeof t.id === 'string' &&
-    typeof t.text === 'string' &&
-    typeof t.done === 'boolean' &&
-    (t.dueDate === undefined || t.dueDate === null || typeof t.dueDate === 'string') &&
-    (t.dueTime === undefined || t.dueTime === null || typeof t.dueTime === 'string')
+    task &&
+    typeof task.id === 'string' &&
+    typeof task.text === 'string' &&
+    typeof task.done === 'boolean' &&
+    (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
+    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string') &&
+    (task.history === undefined || isValidHistory(task.history)) &&
+    (task.completedAt === undefined ||
+      task.completedAt === null ||
+      typeof task.completedAt === 'string') &&
+    (task.archivedAt === undefined ||
+      task.archivedAt === null ||
+      typeof task.archivedAt === 'string') &&
+    (task.archiveReason === undefined ||
+      task.archiveReason === null ||
+      typeof task.archiveReason === 'string')
   )
 }
 
@@ -51,7 +149,7 @@ function sanitizeTask(task: Task): Task | null {
     done: task.done,
     dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
     dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
-    tags: Array.isArray(task.tags) ? task.tags.filter((t) => typeof t === 'string') : [],
+    history: sanitizeTaskHistory(task),
   }
 }
 
@@ -63,7 +161,10 @@ function dueDateSortKey(dueDate: string | null): number {
 function isDuplicate(tasks: TasksState, quadrantId: string, text: string, excludedTaskId: string | null = null): boolean {
   const normalized = normalizeText(text).toLowerCase()
   return tasks[quadrantId].some(
-    (task) => task.id !== excludedTaskId && normalizeText(task.text).toLowerCase() === normalized
+    (task) =>
+      !isArchivedTask(task) &&
+      task.id !== excludedTaskId &&
+      normalizeText(task.text).toLowerCase() === normalized
   )
 }
 
@@ -164,10 +265,11 @@ function validateImportedTasksShape(data: unknown): TasksState {
       const text = normalizeText(t.text as string).slice(0, MAX_TASK_LENGTH)
       sanitized.push({
         text,
-        done: t.done as boolean,
-        id: (t.id as string).trim(),
-        dueDate: typeof t.dueDate === 'string' ? t.dueDate : null,
-        dueTime: typeof t.dueTime === 'string' ? t.dueTime : null,
+        done: task.done,
+        id: task.id.trim(),
+        dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
+        dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+        history: sanitizeTaskHistory(task),
       })
     }
 
@@ -255,10 +357,18 @@ function App() {
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
 
-  const visibleTasks = useMemo<TasksState>(() => {
+  const activeTasks = useMemo(() => {
     const next = emptyTasks()
     for (const { id } of QUADRANTS) {
-      let filtered = tasks[id].filter((task) => {
+      next[id] = tasks[id].filter((task) => !isArchivedTask(task))
+    }
+    return next
+  }, [tasks])
+
+  const visibleTasks = useMemo(() => {
+    const next = emptyTasks()
+    for (const { id } of QUADRANTS) {
+      let filtered = activeTasks[id].filter((task) => {
         if (hideCompleted && task.done) return false
         if (normalizedSearch && !task.text.toLowerCase().includes(normalizedSearch)) return false
         if (parsedTagFilter.length > 0) {
@@ -275,7 +385,7 @@ function App() {
       next[id] = filtered
     }
     return next
-  }, [hideCompleted, normalizedSearch, sortByDueDate, tagFilterInput, tasks])
+  }, [activeTasks, hideCompleted, normalizedSearch, sortByDueDate])
 
   function handleAddTask(quadrantId: string, text: string, dueDate: string | null = null, dueTime: string | null = null): TaskResult {
     const cleanText = normalizeText(text)
@@ -304,16 +414,25 @@ function App() {
     updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((t) =>
-        t.id === taskId ? { ...t, done: !t.done } : t
+        t.id === taskId ? (t.done ? markTaskIncomplete(t) : markTaskComplete(t)) : t
       ),
     }))
   }
 
-  function handleDeleteTask(quadrantId: string, taskId: string): void {
-    updateTasks((prev) => ({
-      ...prev,
-      [quadrantId]: prev[quadrantId].filter((t) => t.id !== taskId),
-    }))
+  function handleDeleteTask(quadrantId, taskId) {
+    updateTasks((prev) => {
+      const task = prev[quadrantId].find((entry) => entry.id === taskId)
+      if (!task) return prev
+
+      return {
+        ...prev,
+        [quadrantId]: task.history.completedAt
+          ? prev[quadrantId].map((entry) =>
+              entry.id === taskId ? archiveTask(entry, 'deleted') : entry
+            )
+          : prev[quadrantId].filter((entry) => entry.id !== taskId),
+      }
+    })
   }
 
   function handleEditTask(quadrantId: string, taskId: string, nextText: string, dueDate: string | null = null, dueTime: string | null = null): TaskResult {
@@ -346,7 +465,9 @@ function App() {
   function handleMoveTask(sourceQuadrantId: string, taskId: string, targetQuadrantId: string): TaskResult {
     if (sourceQuadrantId === targetQuadrantId) return { ok: true }
 
-    const sourceTask = sourceQuadrantTasks.find((task) => task.id === taskId)
+    const sourceTask = tasks[sourceQuadrantId].find(
+      (task) => task.id === taskId && !isArchivedTask(task)
+    )
     if (!sourceTask) return { ok: false, error: 'Task not found.' }
 
     setActiveMoveTask({ sourceQuadrantId, taskId })
@@ -402,7 +523,9 @@ function App() {
       const next = emptyTasks()
 
       for (const id of QUADRANT_IDS) {
-        next[id] = prev[id].filter((task) => !task.done)
+        next[id] = prev[id].map((task) =>
+          task.done ? archiveTask(task, 'cleared-completed') : task
+        )
       }
 
       return next
@@ -460,7 +583,7 @@ function App() {
   }
 
   const hasCompletedTasks = QUADRANTS.some(({ id }) =>
-    tasks[id].some((task) => task.done)
+    activeTasks[id].some((task) => task.done)
   )
 
   return (
@@ -572,7 +695,7 @@ function App() {
               subtitle={q.subtitle}
               colorClass={q.colorClass}
               tasks={visibleTasks[q.id]}
-              totalCount={tasks[q.id].length}
+              totalCount={activeTasks[q.id].length}
               visibleCount={visibleTasks[q.id].length}
               quadrants={QUADRANTS}
               onAddTask={handleAddTask}
