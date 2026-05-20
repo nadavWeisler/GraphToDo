@@ -156,7 +156,9 @@ test('removes emptied quadrants from persisted storage', async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
-    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null }])
+    expect(saved.tasks[secondQuadrant.id]).toEqual([
+      { id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null, tags: [], notes: '' },
+    ])
   })
 })
 
@@ -271,6 +273,104 @@ test('returns focus to the edit button when editing is cancelled', async () => {
   await user.type(editInput, '{Escape}')
 
   expect(document.activeElement).toBe(within(q1).getByRole('button', { name: 'Edit task' }))
+})
+
+test('edit modal loads existing task details into all fields', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          {
+            id: 'task-modal-load',
+            text: 'Prepare launch',
+            done: false,
+            dueDate: '2032-04-11',
+            dueTime: '09:30',
+            tags: ['release', 'team'],
+            notes: 'Coordinate with QA and support',
+          },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  expect(within(q1).getByRole('textbox', { name: 'Edit task text' }).value).toBe('Prepare launch')
+  expect(within(q1).getByLabelText('Due date').value).toBe('2032-04-11')
+  expect(within(q1).getByLabelText('Due time').value).toBe('09:30')
+  expect(within(q1).getByRole('textbox', { name: 'Tags' }).value).toBe('release, team')
+  expect(within(q1).getByRole('textbox', { name: 'Detailed notes' }).value).toBe(
+    'Coordinate with QA and support'
+  )
+})
+
+test('edit modal validates advanced fields before saving', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task-modal-validate', text: 'Fix bug', done: false, dueDate: null, dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  await user.type(within(q1).getByRole('textbox', { name: 'Tags' }), 'a,b,c,d,e,f,g,h,i,j,k')
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  expect(within(q1).getByText('Up to 10 tags are allowed.')).toBeTruthy()
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  expect(saved.tasks.q1[0].tags ?? []).toHaveLength(0)
+})
+
+test('edit modal discard closes without saving unsaved changes', async () => {
+  const user = userEvent.setup()
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task-modal-cancel', text: 'Review notes', done: false, dueDate: null, dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  const editInput = within(q1).getByRole('textbox', { name: 'Edit task text' })
+  await user.clear(editInput)
+  await user.type(editInput, 'Review final notes')
+  await user.click(within(q1).getByRole('button', { name: 'Cancel' }))
+
+  expect(confirmSpy).toHaveBeenCalledWith('Discard unsaved changes?')
+  expect(within(q1).queryByRole('dialog')).toBeNull()
+  expect(within(q1).getByText('Review notes')).toBeTruthy()
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+  expect(within(q1).getByRole('textbox', { name: 'Edit task text' }).value).toBe('Review notes')
+  confirmSpy.mockRestore()
 })
 
 test('imports valid JSON tasks and shows success message', async () => {

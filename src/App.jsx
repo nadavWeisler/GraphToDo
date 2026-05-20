@@ -3,6 +3,9 @@ import Quadrant from './components/Quadrant'
 import './App.css'
 import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 const MAX_TASK_LENGTH = 120
+const MAX_NOTES_LENGTH = 2000
+const MAX_TAG_LENGTH = 30
+const MAX_TAGS_COUNT = 10
 const EXPORT_SCHEMA_VERSION = 1
 
 function emptyTasks() {
@@ -24,8 +27,45 @@ function normalizeText(value) {
   return value.trim().replace(/\s+/g, ' ')
 }
 
-function createTask(text, dueDate = null, dueTime = null) {
-  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime }
+function normalizeTag(value) {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+function normalizeTags(tags) {
+  if (!Array.isArray(tags)) return []
+  const next = []
+  const seen = new Set()
+
+  for (const rawTag of tags) {
+    if (typeof rawTag !== 'string') continue
+    const tag = normalizeTag(rawTag)
+    if (!tag) continue
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    next.push(tag.slice(0, MAX_TAG_LENGTH))
+  }
+
+  return next.slice(0, MAX_TAGS_COUNT)
+}
+
+function normalizeNotes(value) {
+  if (typeof value !== 'string') return ''
+  return value.slice(0, MAX_NOTES_LENGTH)
+}
+
+function isValidDateString(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(value + 'T00:00:00')
+  return !isNaN(parsed.getTime())
+}
+
+function isValidTimeString(value) {
+  return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
+}
+
+function createTask(text, dueDate = null, dueTime = null, tags = [], notes = '') {
+  return { id: crypto.randomUUID(), text, done: false, dueDate, dueTime, tags, notes }
 }
 
 function isValidTask(task) {
@@ -35,19 +75,27 @@ function isValidTask(task) {
     typeof task.text === 'string' &&
     typeof task.done === 'boolean' &&
     (task.dueDate === undefined || task.dueDate === null || typeof task.dueDate === 'string') &&
-    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string')
+    (task.dueTime === undefined || task.dueTime === null || typeof task.dueTime === 'string') &&
+    (task.tags === undefined ||
+      task.tags === null ||
+      (Array.isArray(task.tags) && task.tags.every((tag) => typeof tag === 'string'))) &&
+    (task.notes === undefined || task.notes === null || typeof task.notes === 'string')
   )
 }
 
 function sanitizeTask(task) {
   const text = normalizeText(task.text).slice(0, MAX_TASK_LENGTH)
   if (!text) return null
+  const dueDate = typeof task.dueDate === 'string' && isValidDateString(task.dueDate) ? task.dueDate : null
+  const dueTime = dueDate && typeof task.dueTime === 'string' && isValidTimeString(task.dueTime) ? task.dueTime : null
   return {
     id: task.id,
     text,
     done: task.done,
-    dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
-    dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+    dueDate,
+    dueTime,
+    tags: normalizeTags(task.tags),
+    notes: normalizeNotes(task.notes),
   }
 }
 
@@ -157,8 +205,16 @@ function validateImportedTasksShape(data) {
         text,
         done: task.done,
         id: task.id.trim(),
-        dueDate: typeof task.dueDate === 'string' ? task.dueDate : null,
-        dueTime: typeof task.dueTime === 'string' ? task.dueTime : null,
+        dueDate: typeof task.dueDate === 'string' && isValidDateString(task.dueDate) ? task.dueDate : null,
+        dueTime:
+          typeof task.dueDate === 'string' &&
+          isValidDateString(task.dueDate) &&
+          typeof task.dueTime === 'string' &&
+          isValidTimeString(task.dueTime)
+            ? task.dueTime
+            : null,
+        tags: normalizeTags(task.tags),
+        notes: normalizeNotes(task.notes),
       })
     }
 
@@ -306,8 +362,18 @@ function App() {
     }))
   }
 
-  function handleEditTask(quadrantId, taskId, nextText, dueDate = null, dueTime = null) {
+  function handleEditTask(
+    quadrantId,
+    taskId,
+    nextText,
+    dueDate = null,
+    dueTime = null,
+    tags = [],
+    notes = ''
+  ) {
     const cleanText = normalizeText(nextText)
+    const cleanTags = normalizeTags(tags)
+    const cleanNotes = normalizeNotes(notes)
 
     if (!cleanText) {
       return { ok: false, error: 'Task cannot be empty.' }
@@ -321,11 +387,38 @@ function App() {
       return { ok: false, error: 'A similar task already exists in this quadrant.' }
     }
 
+    if (dueDate && !isValidDateString(dueDate)) {
+      return { ok: false, error: 'Due date must be a valid date.' }
+    }
+
+    if (dueTime && !dueDate) {
+      return { ok: false, error: 'Due time requires a due date.' }
+    }
+
+    if (dueTime && !isValidTimeString(dueTime)) {
+      return { ok: false, error: 'Due time must be valid.' }
+    }
+
+    if (cleanTags.length > MAX_TAGS_COUNT) {
+      return { ok: false, error: `Up to ${MAX_TAGS_COUNT} tags are allowed.` }
+    }
+
+    if (cleanNotes.length > MAX_NOTES_LENGTH) {
+      return { ok: false, error: `Notes must be ${MAX_NOTES_LENGTH} characters or fewer.` }
+    }
+
     updateTasks((prev) => ({
       ...prev,
       [quadrantId]: prev[quadrantId].map((task) =>
         task.id === taskId
-          ? { ...task, text: cleanText, dueDate: dueDate || null, dueTime: dueTime || null }
+          ? {
+            ...task,
+            text: cleanText,
+            dueDate: dueDate || null,
+            dueTime: dueDate ? dueTime || null : null,
+            tags: cleanTags,
+            notes: cleanNotes,
+          }
           : task
       ),
     }))

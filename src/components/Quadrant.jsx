@@ -112,7 +112,9 @@ function Quadrant({
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}
-            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime)}
+            onSave={(payload) =>
+              onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime, payload.tags, payload.notes)
+            }
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
             onDragStart={handleTaskDragStart}
             onDragEnd={() => setIsDragOver(false)}
