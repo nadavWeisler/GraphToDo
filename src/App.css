@@ -87,15 +87,16 @@
   color: #475569;
 }
 
-.due-reminder {
+.status-error-list {
   max-width: 900px;
-  margin: 0 auto 0.5rem;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  background: #fffbeb;
-  color: #92400e;
+  margin: -0.25rem auto 0.5rem;
+  padding-left: 1rem;
   font-size: 0.78rem;
+  color: #b91c1c;
+}
+
+.status-error-list li + li {
+  margin-top: 0.15rem;
 }
 
 .storage-warning {
