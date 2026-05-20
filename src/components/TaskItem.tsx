@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import TaskEditModal from './TaskEditModal'
 import './TaskItem.css'
-import type { Task, QuadrantDef, TaskResult, EditTaskPayload } from '../types'
+import TaskEditModal from './TaskEditModal'
 
 interface DueDateInfo {
   label: string
@@ -52,80 +52,23 @@ function TaskItem({
   onDragStart,
   onDragEnd,
 }) {
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const editButtonRef = useRef(null)
   const shouldRestoreFocusRef = useRef(false)
 
   useEffect(() => {
-    if (!isEditing && shouldRestoreFocusRef.current) {
+    if (!isEditModalOpen && shouldRestoreFocusRef.current) {
       editButtonRef.current?.focus()
       shouldRestoreFocusRef.current = false
     }
-  }, [isEditing])
-
-  function handleSave(payload) {
-    const result = onSave(payload)
-    if (!result.ok) {
-      return result
-    }
-
-    shouldRestoreFocusRef.current = true
-    setIsEditing(false)
-    setErrorMessage('')
-    return result
-  }
-
-  function handleEditChange(event) {
-    setDraftText(event.target.value)
-    if (errorMessage) setErrorMessage('')
-  }
-
-  function handleEditBlur() {
-    if (!draftText.trim()) {
-      setErrorMessage('Task cannot be empty.')
-    }
-  }
+  }, [isEditModalOpen])
 
   function handleMove(event) {
     const target = event.target.value
     const result = onMove(target)
     if (!result.ok) {
       setErrorMessage(result.error ?? '')
-      return
-    }
-
-    setErrorMessage('')
-  }
-
-  function handleCancel() {
-    shouldRestoreFocusRef.current = true
-    setIsEditing(false)
-  }
-
-  function handleKeyboardMove(event) {
-    if (event.target !== event.currentTarget || isEditing) return
-
-    if (event.key === 'Escape' && isMoveActive) {
-      event.preventDefault()
-      onCancelTaskMove()
-      setErrorMessage('')
-      return
-    }
-
-    if (event.key !== 'Enter' && event.key !== ' ') return
-
-    event.preventDefault()
-
-    if (isMoveActive) {
-      onCancelTaskMove()
-      setErrorMessage('')
-      return
-    }
-
-    const result = onStartTaskMove(currentQuadrantId, task.id)
-    if (!result.ok) {
-      setErrorMessage(result.error)
       return
     }
 
@@ -141,21 +84,12 @@ function TaskItem({
         : ''
 
   return (
-    <li
-      className={`task-item${task.done ? ' done' : ''}${isMoveActive ? ' task-item-picked-up' : ''}`}
-      draggable={!isEditing}
-      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
-      onDragEnd={onDragEnd}
-      onKeyDown={handleKeyboardMove}
-      tabIndex={isEditing ? -1 : 0}
-      aria-describedby={`${instructionsId} ${errorId}`}
-      aria-keyshortcuts="Enter Space Escape"
-    >
-      <span className="sr-only" id={instructionsId}>
-        {isMoveActive
-          ? `Task ${task.text} is ready to move. Focus a quadrant and press Enter or Space to drop it, or press Escape to cancel.`
-          : `Task ${task.text}. Press Enter or Space to pick it up and move it to another quadrant.`}
-      </span>
+      <li
+        className={`task-item${task.done ? ' done' : ''}`}
+        draggable={!isEditModalOpen}
+        onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
+        onDragEnd={onDragEnd}
+      >
       <button
         className="toggle-btn"
         onClick={onToggle}
@@ -165,55 +99,7 @@ function TaskItem({
         <span className="checkmark" aria-hidden="true">{task.done ? '✓' : ''}</span>
       </button>
 
-      {isEditing ? (
-        <form className="edit-task-form" onSubmit={handleSave}>
-          <div className="edit-row">
-            <label className="sr-only" htmlFor={`edit-${task.id}`}>Edit task text</label>
-            <input
-              ref={editInputRef}
-              id={`edit-${task.id}`}
-              className={`task-edit-input${errorMessage ? ' task-edit-input--error' : ''}`}
-              type="text"
-              value={draftText}
-              onChange={handleEditChange}
-              onBlur={handleEditBlur}
-              maxLength={120}
-              aria-describedby={`item-error-${task.id}`}
-              aria-invalid={errorMessage ? 'true' : undefined}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  handleCancel()
-                }
-              }}
-            />
-            <button type="submit" className="task-action-btn" aria-label="Save task">Save</button>
-            <button type="button" className="task-action-btn" onClick={handleCancel}>
-              Cancel
-            </button>
-          </div>
-          <div className="edit-row">
-            <label className="sr-only" htmlFor={`edit-due-date-${task.id}`}>Due date</label>
-            <input
-              id={`edit-due-date-${task.id}`}
-              className="task-date-input"
-              type="date"
-              value={draftDueDate}
-              onChange={(event) => setDraftDueDate(event.target.value)}
-              aria-label="Due date"
-            />
-            <label className="sr-only" htmlFor={`edit-due-time-${task.id}`}>Due time</label>
-            <input
-              id={`edit-due-time-${task.id}`}
-              className="task-date-input"
-              type="time"
-              value={draftDueTime}
-              onChange={(event) => setDraftDueTime(event.target.value)}
-              aria-label="Due time"
-              disabled={!draftDueDate}
-            />
-          </div>
-        </form>
-      ) : task.done ? (
+      {task.done ? (
         <button
           type="button"
           className="task-text task-text-btn"
@@ -244,33 +130,29 @@ function TaskItem({
         </div>
       )}
 
-      {!isEditing ? (
-        <>
-          <label className="sr-only" htmlFor={`move-${task.id}`}>Move task to another quadrant</label>
-          <select
-            id={`move-${task.id}`}
-            className="move-select"
-            value={currentQuadrantId}
-            onChange={handleMove}
-            aria-label="Move task"
-          >
-            {quadrants.map((quadrant) => (
-              <option key={quadrant.id} value={quadrant.id}>
-                {quadrant.title}
-              </option>
-            ))}
-          </select>
+      <label className="sr-only" htmlFor={`move-${task.id}`}>Move task to another quadrant</label>
+      <select
+        id={`move-${task.id}`}
+        className="move-select"
+        value={currentQuadrantId}
+        onChange={handleMove}
+        aria-label="Move task"
+      >
+        {quadrants.map((quadrant) => (
+          <option key={quadrant.id} value={quadrant.id}>
+            {quadrant.title}
+          </option>
+        ))}
+      </select>
 
-          <button
-            ref={editButtonRef}
-            className="task-action-btn"
-            onClick={() => setIsEditing(true)}
-            aria-label="Edit task"
-          >
-            Edit
-          </button>
-        </>
-      ) : null}
+      <button
+        ref={editButtonRef}
+        className="task-action-btn"
+        onClick={() => setIsEditModalOpen(true)}
+        aria-label="Edit task"
+      >
+        Edit
+      </button>
 
       <button
         className="delete-btn"
@@ -281,19 +163,18 @@ function TaskItem({
         ×
       </button>
 
-      <p className="item-error" id={`item-error-${task.id}`} role="status" aria-live="polite">
-        {errorMessage && <span>{errorMessage}</span>}
-        {errorMessage && (
-          <button
-            type="button"
-            className="error-dismiss-btn"
-            onClick={() => setErrorMessage('')}
-            aria-label="Dismiss error"
-          >
-            ×
-          </button>
-        )}
-      </p>
+      <p className="item-error" role="status" aria-live="polite">{errorMessage}</p>
+
+      {isEditModalOpen && (
+        <TaskEditModal
+          task={task}
+          onSave={onSave}
+          onClose={() => {
+            shouldRestoreFocusRef.current = true
+            setIsEditModalOpen(false)
+          }}
+        />
+      )}
     </li>
   )
 }
