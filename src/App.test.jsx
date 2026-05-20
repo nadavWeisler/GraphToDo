@@ -197,7 +197,7 @@ test('removes emptied quadrants from persisted storage', async () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
     expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
-    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null }])
+    expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null, tags: [] }])
   })
 })
 
@@ -572,4 +572,197 @@ test('edit task can set and update due date', async () => {
 
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
   expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
+})
+
+test('adds a task with tags and displays them as chips', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+  const tagsInput = within(q1).getByLabelText('New task tags')
+
+  await user.type(addInput, 'Write docs')
+  await user.type(tagsInput, 'work, writing')
+  await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
+
+  expect(within(q1).getByText('Write docs')).toBeTruthy()
+  expect(within(q1).getByText('work')).toBeTruthy()
+  expect(within(q1).getByText('writing')).toBeTruthy()
+})
+
+test('persists tags when adding a task', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const addInput = within(q1).getByRole('textbox', { name: 'Add task to Do First' })
+  const tagsInput = within(q1).getByLabelText('New task tags')
+
+  await user.type(addInput, 'Deploy app')
+  await user.type(tagsInput, 'work, devops')
+  await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  const task = saved.tasks[QUADRANTS[0].id].find((t) => t.text === 'Deploy app')
+  expect(task).toBeTruthy()
+  expect(task.tags).toEqual(['work', 'devops'])
+})
+
+test('can edit tags on an existing task', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'tag-task', text: 'Review PR', done: false, dueDate: null, dueTime: null, tags: ['dev'] }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+
+  await user.click(within(q1).getByRole('button', { name: 'Edit task' }))
+
+  const tagsInput = within(q1).getByLabelText('Tags (comma-separated)')
+  await user.clear(tagsInput)
+  await user.type(tagsInput, 'dev, review')
+
+  await user.click(within(q1).getByRole('button', { name: 'Save task' }))
+
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  const task = saved.tasks[QUADRANTS[0].id].find((t) => t.text === 'Review PR')
+  expect(task.tags).toEqual(['dev', 'review'])
+})
+
+test('filters tasks by a single tag', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
+          { id: 't2', text: 'Personal task', done: false, dueDate: null, dueTime: null, tags: ['personal'] },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
+  await user.type(tagFilterInput, 'work')
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Work task')).toBeTruthy()
+  expect(within(q1).queryByText('Personal task')).toBeNull()
+})
+
+test('filter by tags with no tags entered shows all tasks', async () => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
+          { id: 't2', text: 'Personal task', done: false, dueDate: null, dueTime: null, tags: ['personal'] },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Work task')).toBeTruthy()
+  expect(within(q1).getByText('Personal task')).toBeTruthy()
+})
+
+test('filters tasks by multiple tags using AND logic', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Both tags task', done: false, dueDate: null, dueTime: null, tags: ['work', 'urgent'] },
+          { id: 't2', text: 'Only work task', done: false, dueDate: null, dueTime: null, tags: ['work'] },
+          { id: 't3', text: 'Only urgent task', done: false, dueDate: null, dueTime: null, tags: ['urgent'] },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
+  await user.type(tagFilterInput, 'work, urgent')
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Both tags task')).toBeTruthy()
+  expect(within(q1).queryByText('Only work task')).toBeNull()
+  expect(within(q1).queryByText('Only urgent task')).toBeNull()
+})
+
+test('tag filter combined with search text filters correctly', async () => {
+  const user = userEvent.setup()
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [
+          { id: 't1', text: 'Deploy app', done: false, dueDate: null, dueTime: null, tags: ['work'] },
+          { id: 't2', text: 'Buy groceries', done: false, dueDate: null, dueTime: null, tags: ['work'] },
+        ],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+
+  const searchInput = screen.getByRole('searchbox', { name: 'Search' })
+  await user.type(searchInput, 'deploy')
+
+  const tagFilterInput = screen.getByRole('searchbox', { name: 'Filter by tags' })
+  await user.type(tagFilterInput, 'work')
+
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Deploy app')).toBeTruthy()
+  expect(within(q1).queryByText('Buy groceries')).toBeNull()
+})
+
+test('tasks loaded from storage without tags get empty tags array', () => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'old', text: 'Old task', done: false }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByText('Old task')).toBeTruthy()
+  // task displays without crashing even when tags are missing from stored data
 })

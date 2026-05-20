@@ -25,6 +25,7 @@ function Quadrant({
   const [input, setInput] = useState('')
   const [addDueDate, setAddDueDate] = useState('')
   const [addDueTime, setAddDueTime] = useState('')
+  const [addTags, setAddTags] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const addInputRef = useRef(null)
   const [isDragOver, setIsDragOver] = useState(false)
@@ -50,7 +51,11 @@ function Quadrant({
 
   function handleAdd(event) {
     event.preventDefault()
-    const result = onAddTask(id, input, addDueDate || null, addDueTime || null)
+    const tags = addTags
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean)
+    const result = onAddTask(id, input, addDueDate || null, addDueTime || null, tags)
 
     if (!result.ok) {
       setErrorMessage(result.error)
@@ -60,6 +65,7 @@ function Quadrant({
     setInput('')
     setAddDueDate('')
     setAddDueTime('')
+    setAddTags('')
     setErrorMessage('')
     addInputRef.current?.focus()
   }
@@ -165,7 +171,7 @@ function Quadrant({
             currentQuadrantId={id}
             onToggle={() => onToggleTask(id, task.id)}
             onDelete={() => onDeleteTask(id, task.id)}
-            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime)}
+            onSave={(payload) => onEditTask(id, task.id, payload.text, payload.dueDate, payload.dueTime, payload.tags)}
             onMove={(targetQuadrantId) => onMoveTask(id, task.id, targetQuadrantId)}
             onDragStart={handleTaskDragStart}
             onDragEnd={(event) => {
@@ -217,6 +223,17 @@ function Quadrant({
             onChange={(event) => setAddDueTime(event.target.value)}
             aria-label="New task due time"
             disabled={!addDueDate}
+          />
+        </div>
+        <div className="add-task-tags-row">
+          <label className="sr-only" htmlFor={`add-tags-${id}`}>New task tags</label>
+          <input
+            id={`add-tags-${id}`}
+            type="text"
+            value={addTags}
+            onChange={(event) => setAddTags(event.target.value)}
+            placeholder="tag1, tag2…"
+            aria-label="New task tags"
           />
         </div>
       </form>
