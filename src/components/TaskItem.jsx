@@ -1,20 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
 import './TaskItem.css'
 
+const DUE_SOON_DAYS = 3
+const DAY_IN_MS = 1000 * 60 * 60 * 24
+
+function dueDateToUtcMidnight(dueDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null
+  const [year, month, day] = dueDate.split('-').map(Number)
+  return Date.UTC(year, month - 1, day)
+}
+
 function formatDueDateLabel(dueDate, dueTime) {
   if (!dueDate) return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null
+  const dueUtcMidnight = dueDateToUtcMidnight(dueDate)
+  if (dueUtcMidnight === null) return null
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDate + 'T00:00:00')
-  if (isNaN(due.getTime())) return null
-  const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24))
+  const todayUtcMidnight = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
+  const diffDays = Math.floor((dueUtcMidnight - todayUtcMidnight) / DAY_IN_MS)
   const timeStr = dueTime ? ` ${dueTime}` : ''
 
   if (diffDays < 0) return { label: `Overdue${timeStr}`, urgency: 'overdue' }
   if (diffDays === 0) return { label: `Today${timeStr}`, urgency: 'today' }
   if (diffDays === 1) return { label: `Tomorrow${timeStr}`, urgency: 'soon' }
-  if (diffDays <= 3) return { label: `${diffDays} days${timeStr}`, urgency: 'soon' }
+  if (diffDays <= DUE_SOON_DAYS) return { label: `${diffDays} days${timeStr}`, urgency: 'soon' }
+
+  const due = new Date(dueUtcMidnight)
   return {
     label: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + timeStr,
     urgency: 'normal',

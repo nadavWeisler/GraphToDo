@@ -5,6 +5,17 @@ import { QUADRANTS, QUADRANT_IDS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quad
 const MAX_TASK_LENGTH = 120
 const EXPORT_SCHEMA_VERSION = 1
 
+function isDueToday(dueDate) {
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return false
+  const today = new Date()
+  const todayStr = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+  return dueDate === todayStr
+}
+
 function emptyTasks() {
   return Object.fromEntries(QUADRANT_IDS.map((id) => [id, []]))
 }
@@ -417,6 +428,11 @@ function App() {
   const hasCompletedTasks = QUADRANTS.some(({ id }) =>
     tasks[id].some((task) => task.done)
   )
+  const dueTodayCount = QUADRANTS.reduce(
+    (count, { id }) =>
+      count + tasks[id].filter((task) => !task.done && isDueToday(task.dueDate)).length,
+    0
+  )
 
   return (
     <div className="app">
@@ -496,6 +512,11 @@ function App() {
       <p className="status-message" role="status" aria-live="polite">
         {statusMessage}
       </p>
+      {dueTodayCount > 0 && (
+        <p className="due-reminder" role="status" aria-live="polite">
+          Reminder: {dueTodayCount} task{dueTodayCount === 1 ? '' : 's'} due today.
+        </p>
+      )}
 
       <div className="matrix-labels" aria-hidden="true">
         <span className="axis-label urgent-label">← Urgent</span>

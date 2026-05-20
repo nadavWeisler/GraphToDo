@@ -505,6 +505,56 @@ test('shows due-today indicator for tasks due today', async () => {
   expect(badge).toBeTruthy()
 })
 
+test('shows due-soon indicator for tasks due within the reminder window', async () => {
+  const inTwoDays = new Date()
+  inTwoDays.setDate(inTwoDays.getDate() + 2)
+  const dueSoonDate = [
+    inTwoDays.getFullYear(),
+    String(inTwoDays.getMonth() + 1).padStart(2, '0'),
+    String(inTwoDays.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  localStorage.setItem(
+    LEGACY_STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task-soon', text: 'Due soon task', done: false, dueDate: dueSoonDate, dueTime: null }],
+        q2: [],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  const q1 = getQuadrantByLabel('Do First')
+  expect(within(q1).getByLabelText(new RegExp(`Due: 2 days`, 'i'))).toBeTruthy()
+})
+
+test('shows in-app reminder for active tasks due today', async () => {
+  const today = new Date()
+  const todayStr = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-')
+
+  localStorage.setItem(
+    LEGACY_STORAGE_KEY,
+    JSON.stringify({
+      tasks: {
+        q1: [{ id: 'task-reminder', text: 'Reminder task', done: false, dueDate: todayStr, dueTime: null }],
+        q2: [{ id: 'task-done', text: 'Done today', done: true, dueDate: todayStr, dueTime: null }],
+        q3: [],
+        q4: [],
+      },
+    })
+  )
+
+  render(<App />)
+  expect(screen.getByText('Reminder: 1 task due today.')).toBeTruthy()
+})
+
 test('edit task can set and update due date', async () => {
   const user = userEvent.setup()
   localStorage.setItem(
