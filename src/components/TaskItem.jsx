@@ -36,6 +36,7 @@ function TaskItem({
   const [draftText, setDraftText] = useState(task.text)
   const [draftDueDate, setDraftDueDate] = useState(task.dueDate ?? '')
   const [draftDueTime, setDraftDueTime] = useState(task.dueTime ?? '')
+  const [isDragging, setIsDragging] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const editInputRef = useRef(null)
   const editButtonRef = useRef(null)
@@ -86,6 +87,16 @@ function TaskItem({
     setErrorMessage('')
   }
 
+  function handleDragStart(event) {
+    setIsDragging(true)
+    onDragStart(event, currentQuadrantId, task.id)
+  }
+
+  function handleDragEnd() {
+    setIsDragging(false)
+    onDragEnd()
+  }
+
   const dueDateInfo = formatDueDateLabel(task.dueDate, task.dueTime)
   const ariaLabelSuffix =
     dueDateInfo?.urgency === 'overdue'
@@ -98,8 +109,9 @@ function TaskItem({
     <li
       className={`task-item${task.done ? ' done' : ''}`}
       draggable={!isEditing}
-      onDragStart={(event) => onDragStart(event, currentQuadrantId, task.id)}
-      onDragEnd={onDragEnd}
+      aria-grabbed={!isEditing ? isDragging : undefined}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       <button
         className="toggle-btn"

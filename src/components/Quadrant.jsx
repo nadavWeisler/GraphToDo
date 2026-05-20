@@ -19,6 +19,7 @@ function Quadrant({
   onEditTask,
   onMoveTask,
 }) {
+  const headingId = `quadrant-title-${id}`
   const [input, setInput] = useState('')
   const [addDueDate, setAddDueDate] = useState('')
   const [addDueTime, setAddDueTime] = useState('')
@@ -90,13 +91,16 @@ function Quadrant({
   return (
     <section
       className={`quadrant ${colorClass}${isDragOver ? ' drag-over' : ''}`}
+      role="region"
       aria-label={`${title} quadrant`}
+      aria-labelledby={headingId}
+      aria-dropeffect="move"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div className="quadrant-header">
-        <h2>{title}</h2>
+        <h2 id={headingId}>{title}</h2>
         <p>{subtitle}</p>
         <p className="count-text" aria-live="polite">
           {totalCount} total{visibleCount !== totalCount ? ` • ${visibleCount} shown` : ''}

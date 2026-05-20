@@ -5,7 +5,7 @@ import App from './App'
 import { QUADRANTS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 
 function getQuadrantByLabel(label) {
-  return screen.getByRole('region', { name: `${label} quadrant` })
+  return screen.getByRole('region', { name: new RegExp(`^${label}( quadrant)?$`) })
 }
 
 test('adds, toggles, and deletes a task', async () => {
@@ -390,6 +390,40 @@ test('drag-over applies visual feedback class on quadrant', async () => {
 
   fireEvent.dragLeave(q2, { dataTransfer, relatedTarget: document.body })
   expect(q2.classList.contains('drag-over')).toBe(false)
+})
+
+test('exposes drag-and-drop accessibility attributes for tasks and quadrants', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  const q1 = getQuadrantByLabel('Do First')
+  const heading = within(q1).getByRole('heading', { name: 'Do First' })
+  expect(q1.getAttribute('aria-labelledby')).toBe(heading.id)
+  expect(q1.getAttribute('aria-dropeffect')).toBe('move')
+
+  await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'A11y drag{enter}')
+
+  const taskItem = within(q1).getByText('A11y drag').closest('li')
+  expect(taskItem.getAttribute('draggable')).toBe('true')
+  expect(taskItem.getAttribute('aria-grabbed')).toBe('false')
+
+  const dragData = new Map()
+  const dataTransfer = {
+    effectAllowed: 'all',
+    setData(type, value) {
+      dragData.set(type, value)
+    },
+    getData(type) {
+      return dragData.get(type) ?? ''
+    },
+    types: [],
+  }
+
+  fireEvent.dragStart(taskItem, { dataTransfer })
+  expect(taskItem.getAttribute('aria-grabbed')).toBe('true')
+
+  fireEvent.dragEnd(taskItem)
+  expect(taskItem.getAttribute('aria-grabbed')).toBe('false')
 })
 
 test('can set and display a due date on a task', async () => {
