@@ -292,10 +292,8 @@ function defaultConfig(): AppConfig {
   return { hideCompleted: false }
 }
 
-function loadState(): AppState {
-  if (!canUseLocalStorage()) {
-    return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: false }
-  }
+function loadState() {
+  const storageAvailable = canUseLocalStorage()
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -306,19 +304,19 @@ function loadState(): AppState {
         ...defaultConfig(),
         ...(parsed.config && typeof parsed.config === 'object' ? parsed.config as Partial<AppConfig> : {}),
       }
-      return { tasks, config, storageAvailable: true }
+      return { tasks, config, storageAvailable }
     }
 
     const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
     if (legacy) {
-      const parsed = JSON.parse(legacy) as Record<string, unknown>
-      const tasks = validateTasksShape((parsed.tasks ?? parsed) as unknown) ?? emptyTasks()
-      return { tasks, config: defaultConfig(), storageAvailable: true }
+      const parsed = JSON.parse(legacy)
+      const tasks = validateTasksShape(parsed.tasks ?? parsed) ?? emptyTasks()
+      return { tasks, config: defaultConfig(), storageAvailable }
     }
   } catch {
     // fall through to defaults
   }
-  return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable: true }
+  return { tasks: emptyTasks(), config: defaultConfig(), storageAvailable }
 }
 
 function App() {
