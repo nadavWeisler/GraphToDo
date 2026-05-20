@@ -4,7 +4,7 @@ import { vi } from 'vitest'
 import App from './App'
 import { QUADRANTS, STORAGE_KEY, LEGACY_STORAGE_KEY } from './quadrants'
 
-function getQuadrantByLabel(label) {
+function getQuadrantByLabel(label: string) {
   return screen.getByRole('region', { name: `${label} quadrant` })
 }
 
@@ -34,7 +34,7 @@ test('reopens a completed task from the task itself and updates completed contro
   render(<App />)
 
   const q1 = getQuadrantByLabel('Do First')
-  const clearCompletedButton = screen.getByRole('button', { name: 'Clear completed' })
+  const clearCompletedButton = screen.getByRole('button', { name: 'Clear completed' }) as HTMLButtonElement
 
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Pay rent{enter}')
   expect(clearCompletedButton.disabled).toBe(true)
@@ -79,18 +79,18 @@ test('moves a task between quadrants with drag and drop', async () => {
     'Plan sprint{enter}'
   )
 
-  const task = within(firstRegion).getByText('Plan sprint').closest('li')
+  const task = within(firstRegion).getByText('Plan sprint').closest('li')!
   const thirdRegion = getQuadrantByLabel(thirdQuadrant.title)
-  const dragData = new Map()
+  const dragData = new Map<string, string>()
   const dataTransfer = {
     dropEffect: 'none',
     effectAllowed: 'all',
-    types: [],
-    setData(type, value) {
+    types: [] as string[],
+    setData(type: string, value: string) {
       dragData.set(type, value)
       this.types = [...dragData.keys()]
     },
-    getData(type) {
+    getData(type: string) {
       return dragData.get(type) ?? ''
     },
   }
@@ -128,9 +128,9 @@ test('loads tasks from legacy storage keys and persists current quadrant ids', a
     'Write tests{enter}'
   )
 
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-  expect(saved.tasks[firstQuadrant.id].some((task) => task.text === 'Write tests')).toBe(true)
-  expect(saved.tasks[secondQuadrant.id].some((task) => task.text === 'Review roadmap')).toBe(true)
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+  expect(saved.tasks[firstQuadrant.id].some((task: { text: string }) => task.text === 'Write tests')).toBe(true)
+  expect(saved.tasks[secondQuadrant.id].some((task: { text: string }) => task.text === 'Review roadmap')).toBe(true)
   expect(saved.tasks.q1).toBeUndefined()
   expect(saved.tasks.q2).toBeUndefined()
 })
@@ -153,7 +153,7 @@ test('removes emptied quadrants from persisted storage', async () => {
   await user.click(within(q1).getByRole('button', { name: 'Delete task' }))
 
   await waitFor(() => {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
     expect(saved.tasks[firstQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.legacyId]).toBeUndefined()
     expect(saved.tasks[secondQuadrant.id]).toEqual([{ id: 'task-2', text: 'Keep me', done: false, dueDate: null, dueTime: null }])
@@ -181,7 +181,7 @@ test('persists config flags alongside tasks in state.v2 format', async () => {
   const q1 = getQuadrantByLabel('Do First')
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Config test{enter}')
 
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
   expect(saved).toHaveProperty('tasks')
   expect(saved).toHaveProperty('config')
   expect(typeof saved.config).toBe('object')
@@ -278,7 +278,7 @@ test('imports valid JSON tasks and shows success message', async () => {
   const [firstQuadrant] = QUADRANTS
   const { container } = render(<App />)
 
-  const fileInput = container.querySelector('input[type="file"]')
+  const fileInput = container.querySelector('input[type="file"]')!
   const file = new File(
     [
       JSON.stringify({
@@ -292,7 +292,7 @@ test('imports valid JSON tasks and shows success message', async () => {
     { type: 'application/json' }
   )
 
-  await user.upload(fileInput, file)
+  await user.upload(fileInput as HTMLElement, file)
 
   const q1 = getQuadrantByLabel('Do First')
   expect(within(q1).getByText('Plan sprint')).toBeTruthy()
@@ -304,7 +304,7 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
   const [firstQuadrant] = QUADRANTS
   const { container } = render(<App />)
 
-  const fileInput = container.querySelector('input[type="file"]')
+  const fileInput = container.querySelector('input[type="file"]')!
   const file = new File(
     [
       JSON.stringify({
@@ -318,7 +318,7 @@ test('shows actionable error when imported JSON schema is invalid', async () => 
     { type: 'application/json' }
   )
 
-  await user.upload(fileInput, file)
+  await user.upload(fileInput as HTMLElement, file)
 
   expect(
     screen.getByText(
@@ -367,19 +367,19 @@ test('drag-over applies visual feedback class on quadrant', async () => {
   const q1 = getQuadrantByLabel('Do First')
   await user.type(within(q1).getByRole('textbox', { name: 'Add task to Do First' }), 'Highlight test{enter}')
 
-  const taskItem = within(q1).getByText('Highlight test').closest('li')
+  const taskItem = within(q1).getByText('Highlight test').closest('li')!
   const q2 = getQuadrantByLabel('Schedule')
 
-  const dragData = new Map()
+  const dragData = new Map<string, string>()
   const dataTransfer = {
     dropEffect: 'none',
     effectAllowed: 'all',
-    types: [],
-    setData(type, value) {
+    types: [] as string[],
+    setData(type: string, value: string) {
       dragData.set(type, value)
       this.types = [...dragData.keys()]
     },
-    getData(type) {
+    getData(type: string) {
       return dragData.get(type) ?? ''
     },
   }
@@ -456,8 +456,8 @@ test('adds a task with a due date and shows it in the task list', async () => {
   await user.click(within(q1).getByRole('button', { name: 'Add task to Do First' }))
 
   expect(within(q1).getByText('Submit report')).toBeTruthy()
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-  expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Submit report' && t.dueDate === '2030-12-31')).toBe(true)
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+  expect(saved.tasks[QUADRANTS[0].id].some((t: { text: string; dueDate: string | null }) => t.text === 'Submit report' && t.dueDate === '2030-12-31')).toBe(true)
 })
 
 test('shows overdue indicator for tasks with a past due date', async () => {
@@ -529,6 +529,6 @@ test('edit task can set and update due date', async () => {
 
   await user.click(within(q1).getByRole('button', { name: 'Save task' }))
 
-  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY))
-  expect(saved.tasks[QUADRANTS[0].id].some((t) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
+  const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+  expect(saved.tasks[QUADRANTS[0].id].some((t: { text: string; dueDate: string | null }) => t.text === 'Fix bug' && t.dueDate === '2030-06-15')).toBe(true)
 })
